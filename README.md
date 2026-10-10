@@ -53,7 +53,7 @@ always request ISP info. To disable it in the web UI, set `getIp_ispInfo: false`
 
 ### Install using prebuilt binaries
 
-1. Download the appropriate binary file from the [releases](https://github.com/librespeed/speedtest-go/releases/) page.
+1. Download the appropriate binary file from the [releases](https://github.com/sprytnyk/speedtest-go/releases/) page.
 2. Unzip the archive.
 3. Make changes to the configuration.
 4. Run the binary.
@@ -69,7 +69,7 @@ You need Go 1.21+ to compile the binary.
 1. Clone this repository:
 
     ```
-    $ git clone https://github.com/librespeed/speedtest-go
+    $ git clone https://github.com/sprytnyk/speedtest-go
     ```
 
 2. Build
