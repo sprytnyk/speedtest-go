@@ -18,7 +18,7 @@ Works with mobile versions too.
 * Upload
 * Ping
 * Jitter
-* IP Address, ISP, distance from server (optional)
+* IP Address, ISP and country
 * Telemetry (optional)
 * Results sharing via PNG image and JSON API (optional)
 * Multiple Points of Test (optional)
@@ -26,12 +26,20 @@ Works with mobile versions too.
 * Supports [Proxy Protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt)
 * Modern and classic UI designs with switchable interface
 * ID obfuscation for test result privacy (optional)
+* Connection stability test (`stability.html`) with latency charting, loss tracking, threshold alerts and CSV export
 
 ### IP Detection
 * Client IP detection with proxy header chain support (X-Forwarded-For, X-Real-IP, Client-IP, CF-Connecting-IPv6)
-* ISP and location detection via ipinfo.io API with offline GeoIP database fallback (MaxMind .mmdb)
+* ISP and country detection via the [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json) API
 * Private/special IP detection (including ULA IPv6 and CGNAT)
-* Distance calculation with human-friendly rounding
+
+### Privacy
+ISP lookups use the [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json) API without any kind of tracking:
+only the client's IP address is sent, no API key, cookies or other identifiers are involved, and private/special
+IPs are never sent at all.
+
+The lookup is enabled by default: the bundled UI and [speedtest-cli](https://github.com/librespeed/speedtest-cli)
+always request ISP info. To disable it in the web UI, set `getIp_ispInfo: false` in the speedtest settings.
 
 ![Screencast](https://speedtest.zzz.cat/speedtest.webp)
 
@@ -105,11 +113,6 @@ You need Go 1.21+ to compile the binary.
     listen_port=8989
     # proxy protocol port, use 0 to disable
     proxyprotocol_port=0
-    # Server location, use zeroes to fetch from API automatically
-    server_lat=0
-    server_lng=0
-    # ipinfo.io API key, if applicable
-    ipinfo_api_key=""
    
     # assets directory path, defaults to `assets` in the same directory
     # if the path cannot be found, embedded default assets will be used
@@ -134,10 +137,6 @@ You need Go 1.21+ to compile the binary.
     # if you use `bolt` or `sqlite` as database, set database_file to database file location
     database_file="speedtest.db"
 
-    # GeoIP offline database (.mmdb format) for ISP detection fallback (optional)
-    # Leave empty to disable.
-    # geoip_database_file="country_asn.mmdb"
-
     # TLS and HTTP/2 settings. TLS is required for HTTP/2
     enable_tls=false
     enable_http2=false
@@ -152,11 +151,12 @@ You need Go 1.21+ to compile the binary.
 - Test IDs are generated as ULID (Universally Unique Lexicographically Sortable Identifier), unlike the PHP version's auto-increment integer IDs
 - ID obfuscation is available as an optional feature — when enabled, ULIDs are obfuscated with a per-instance salt
 - The Go version ships with two built-in UI designs (classic gauges and modern CSS), switchable via `?design=new` URL parameter
-- The modern design (`index-modern.html`) supports multi-server configuration via `server-list.json` placed alongside the binary
-- Server location can be defined in settings or auto-detected at startup
-- There might be a slight delay on program start if your Internet connection is slow. That's because the program will
-attempt to fetch your current network's ISP info for distance calculation between your network and the speed test client's.
-This action will only be taken once, and cached for later use.
+- The modern design (`index-modern.html`) supports multi-server configuration via `server-list.json` placed alongside the binary;
+without it, the test runs against the local server
+- ISP and country are looked up via the [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json) API instead of
+ipinfo.io or an offline GeoIP database, so no API key or `.mmdb` file is needed
+- Distance between the client and the server is not calculated, so the `server_lat`, `server_lng`,
+`ipinfo_api_key` and `geoip_database_file` settings are no longer used
 
 ## License
 Copyright (C) 2016-2020 Federico Dossena

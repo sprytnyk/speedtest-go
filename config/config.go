@@ -6,13 +6,10 @@ import (
 )
 
 type Config struct {
-	BindAddress       string  `mapstructure:"bind_address"`
-	Port              string  `mapstructure:"listen_port"`
-	BaseURL           string  `mapstructure:"url_base"`
-	ProxyProtocolPort string  `mapstructure:"proxyprotocol_port"`
-	ServerLat         float64 `mapstructure:"server_lat"`
-	ServerLng         float64 `mapstructure:"server_lng"`
-	IPInfoAPIKey      string  `mapstructure:"ipinfo_api_key"`
+	BindAddress       string `mapstructure:"bind_address"`
+	Port              string `mapstructure:"listen_port"`
+	BaseURL           string `mapstructure:"url_base"`
+	ProxyProtocolPort string `mapstructure:"proxyprotocol_port"`
 
 	StatsPassword       string `mapstructure:"statistics_password"`
 	RedactIP            bool   `mapstructure:"redact_ip_addresses"`
@@ -28,8 +25,6 @@ type Config struct {
 
 	DatabaseFile string `mapstructure:"database_file"`
 	DatabasePort string `mapstructure:"database_port"`
-
-	GeoIPDatabaseFile string `mapstructure:"geoip_database_file"`
 
 	EnableHTTP2 bool   `mapstructure:"enable_http2"`
 	EnableTLS   bool   `mapstructure:"enable_tls"`
@@ -47,7 +42,6 @@ func init() {
 	viper.SetDefault("url_base", "")
 	viper.SetDefault("proxyprotocol_port", "0")
 	viper.SetDefault("download_chunks", 4)
-	viper.SetDefault("distance_unit", "K")
 	viper.SetDefault("enable_cors", false)
 	viper.SetDefault("statistics_password", "PASSWORD")
 	viper.SetDefault("redact_ip_addresses", false)

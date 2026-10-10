@@ -6,11 +6,6 @@ listen_port=8989
 # url_base="/librespeed"
 # proxy protocol port, use 0 to disable
 proxyprotocol_port=0
-# Server location
-server_lat=1
-server_lng=1
-# ipinfo.io API key, if applicable
-ipinfo_api_key=""
 
 # assets directory path, defaults to `assets` in the same directory
 assets_path=""
@@ -33,11 +28,6 @@ database_port=""
 # if you use `bolt` as database, set database_file to database file location
 # if you use `sqlite` as database, set database_file to database file location
 database_file="speedtest.db"
-
-# GeoIP offline database (.mmdb format) for ISP and country detection when ipinfo.io API is not available
-# This is used as a fallback, matching the PHP backend behavior.
-# Leave empty to disable.
-# geoip_database_file="country_asn.mmdb"
 
 # TLS and HTTP/2 settings. TLS is required for HTTP/2
 enable_tls=false

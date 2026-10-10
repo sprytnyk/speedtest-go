@@ -214,12 +214,11 @@ func getIP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	getISPInfo := r.FormValue("isp") == "true"
-	distanceUnit := r.FormValue("distance")
 
 	ret.ProcessedString = clientIP
 
 	if getISPInfo {
-		ispInfo := getISPInfoByPriority(clientIP)
+		ispInfo := lookupISPInfo(clientIP)
 		ret.RawISPInfo = ispInfo
 
 		removeRegexp := regexp.MustCompile(`AS\d+\s`)
@@ -229,12 +228,9 @@ func getIP(w http.ResponseWriter, r *http.Request) {
 			isp = "Unknown ISP"
 		}
 
-		if ispInfo.Country != "" {
+		// the lookup API reports missing fields as "Unknown"
+		if ispInfo.Country != "" && ispInfo.Country != "Unknown" {
 			isp += ", " + ispInfo.Country
-		}
-
-		if ispInfo.Location != "" {
-			isp += " (" + calculateDistance(ispInfo.Location, distanceUnit) + ")"
 		}
 
 		ret.ProcessedString += " - " + isp

@@ -24,7 +24,8 @@
 html,
 body {
   min-height: 100vh;
-  width: 100vw;
+  /* 100vw includes the vertical scrollbar and causes horizontal scrolling */
+  width: 100%;
 }
 
 html {

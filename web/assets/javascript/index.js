@@ -135,8 +135,20 @@ async function applySettingsJSON() {
   }
 }
 
+// Server used when no server list is available, matching the classic and
+// stability pages. URLs are relative so they also work behind a URL prefix.
+const LOCAL_SERVER = {
+  name: "Local server",
+  server: "./",
+  dlURL: "backend/garbage.php",
+  ulURL: "backend/empty.php",
+  pingURL: "backend/empty.php",
+  getIpURL: "backend/getIP.php",
+};
+
 /**
- * Load server list from the configured source and populate the dropdown
+ * Load server list from the configured source and populate the dropdown.
+ * Falls back to the local server if the list is missing, malformed or empty.
  */
 async function applyServerListJSON() {
   try {
@@ -144,11 +156,17 @@ async function applyServerListJSON() {
       typeof globalThis.SPEEDTEST_SERVERS !== "undefined"
         ? globalThis.SPEEDTEST_SERVERS
         : "server-list.json";
-    const servers = Array.isArray(serverSource)
-      ? serverSource
-      : await fetch(serverSource).then((response) => response.json());
+    let servers = serverSource;
+    if (!Array.isArray(serverSource)) {
+      try {
+        servers = await fetch(serverSource).then((response) => response.json());
+      } catch (error) {
+        servers = null;
+      }
+    }
     if (!servers || !Array.isArray(servers) || servers.length === 0) {
-      return console.error("Server list is empty or malformed");
+      console.info("No server list available, using the local server");
+      servers = [LOCAL_SERVER];
     }
 
     testState.servers = servers;

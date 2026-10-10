@@ -31,7 +31,8 @@ func formatValue(d string) string {
 }
 
 // extractISPName extracts the ISP name from the processedString format:
-// "IP - ISP, Country (distance)" → "ISP"
+// "IP - ISP, Country" → "ISP, Country". A trailing "(distance)" suffix, present
+// in results recorded by older versions, is stripped.
 func extractISPName(processedString string) string {
 	dash := strings.Index(processedString, "-")
 	if dash == -1 {
