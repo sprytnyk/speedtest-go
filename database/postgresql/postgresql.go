@@ -2,7 +2,7 @@ package postgresql
 
 import (
 	"database/sql"
-	"fmt"
+	"net/url"
 
 	"github.com/librespeed/speedtest-go/database/schema"
 
@@ -10,17 +10,19 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	connectionStringTemplate = `postgres://%s:%s@%s/%s?sslmode=disable`
-)
-
 type PostgreSQL struct {
 	db *sql.DB
 }
 
 func Open(hostname, username, password, database string) *PostgreSQL {
-	connStr := fmt.Sprintf(connectionStringTemplate, username, password, hostname, database)
-	conn, err := sql.Open("postgres", connStr)
+	connStr := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(username, password),
+		Host:     hostname,
+		Path:     database,
+		RawQuery: "sslmode=disable",
+	}
+	conn, err := sql.Open("postgres", connStr.String())
 	if err != nil {
 		log.Fatalf("Cannot open PostgreSQL database: %s", err)
 	}
@@ -52,6 +54,7 @@ func (p *PostgreSQL) FetchLast100() ([]schema.TelemetryData, error) {
 		return nil, err
 	}
 	if rows != nil {
+		defer rows.Close()
 		var id string
 
 		for rows.Next() {
@@ -62,5 +65,5 @@ func (p *PostgreSQL) FetchLast100() ([]schema.TelemetryData, error) {
 			records = append(records, record)
 		}
 	}
-	return records, nil
+	return records, rows.Err()
 }
