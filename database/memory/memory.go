@@ -47,5 +47,10 @@ func (mem *Memory) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 func (mem *Memory) FetchLast100() ([]schema.TelemetryData, error) {
 	mem.lock.RLock()
 	defer mem.lock.RUnlock()
-	return mem.records, nil
+	// newest first, like the other backends
+	records := make([]schema.TelemetryData, len(mem.records))
+	for i, record := range mem.records {
+		records[len(records)-1-i] = record
+	}
+	return records, nil
 }
