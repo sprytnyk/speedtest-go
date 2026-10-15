@@ -1,8 +1,6 @@
 /**
- * Design by fromScratch Studio - 2022, 2023 (fromscratch.io)
- * Implementation in HTML/CSS/JS by Timendus - 2024 (https://github.com/Timendus)
- *
- * See https://github.com/librespeed/speedtest/issues/585
+ * Speed test page: runs the LibreSpeed test from speedtest.js and renders the
+ * results, matching the layout of the stability page.
  */
 
 // States the UI can be in
@@ -16,16 +14,58 @@ const testState = {
   state: INITIALIZING,
   speedtest: null,
   servers: [],
-  selectedServerDirty: false,
   testData: null,
-  testDataDirty: false,
   telemetryEnabled: false,
+  noServer: false, // no server answered the reachability check
+  aborted: false, // the last test was stopped before it finished
+  startedAt: 0, // performance.now() when the test started
+  samples: [], // { t: seconds since start, v: Mbps, kind: "dl" | "ul" }
+  hoverX: null, // pointer position over the chart, in CSS pixels
+  dirty: true, // re-render on the next animation frame
 };
 
+// Chart colors: blue and amber stay distinct for common color vision
+// deficiencies, and download and upload never overlap in time anyway
+const CHART_COLORS = {
+  download: "#3b82f6",
+  downloadFill: "rgba(59, 130, 246, 0.22)",
+  downloadFillEnd: "rgba(59, 130, 246, 0)",
+  upload: "#f59e0b",
+  uploadFill: "rgba(245, 158, 11, 0.2)",
+  uploadFillEnd: "rgba(245, 158, 11, 0)",
+  grid: "#334155",
+  text: "#94a3b8",
+  reference: "#94a3b8",
+  surface: "#1e293b",
+};
+const MIN_CHART_SECONDS = 35; // roughly one full run with the default settings
+const CHART_PADDING = { right: 8, top: 16, bottom: 26 };
+
+// Server used when no server list is available, matching the stability page.
+// URLs are relative so they also work behind a URL prefix.
+const LOCAL_SERVER = {
+  name: "Local server",
+  server: "./",
+  dlURL: "backend/garbage.php",
+  ulURL: "backend/empty.php",
+  pingURL: "backend/empty.php",
+  getIpURL: "backend/getIP.php",
+};
+
+const $ = (id) => document.getElementById(id);
+
 // Bootstrap the application when the DOM is ready
-window.addEventListener("DOMContentLoaded", async () => {
+window.addEventListener("DOMContentLoaded", () => {
+  I18N.onChange(() => {
+    testState.dirty = true;
+    try {
+      showSponsor(testState.speedtest.getSelectedServer());
+    } catch (e) {
+      // no server selected yet
+    }
+  });
   createSpeedtest();
-  hookUpButtons();
+  hookUpControls();
   startRenderingLoop();
   applySettingsJSON();
   applyServerListJSON();
@@ -38,39 +78,66 @@ function createSpeedtest() {
   testState.speedtest = new Speedtest();
   testState.speedtest.onupdate = (data) => {
     testState.testData = data;
-    testState.testDataDirty = true;
+    recordSample(data);
+    testState.dirty = true;
   };
-  testState.speedtest.onend = (aborted) =>
-    (testState.state = aborted ? READY : FINISHED);
+  testState.speedtest.onend = (aborted) => {
+    testState.state = aborted ? READY : FINISHED;
+    testState.aborted = aborted;
+    testState.dirty = true;
+  };
 }
 
 /**
- * Make all the buttons respond to the right clicks
+ * Make all the buttons, the server list and the chart respond to input
  */
-function hookUpButtons() {
-  document
-    .querySelector("#start-button")
-    .addEventListener("click", startButtonClickHandler);
-  document
-    .querySelector("#choose-privacy")
-    .addEventListener("click", () =>
-      document.querySelector("#privacy").showModal()
-    );
-  document
-    .querySelector("#share-results")
-    .addEventListener("click", () =>
-      document.querySelector("#share").showModal()
-    );
-  document
-    .querySelector("#copy-link")
-    .addEventListener("click", copyLinkButtonClickHandler);
-  document
-    .querySelectorAll(".close-dialog, #close-privacy")
-    .forEach((element) => {
-      element.addEventListener("click", () =>
-        document.querySelectorAll("dialog").forEach((modal) => modal.close())
-      );
+function hookUpControls() {
+  $("start-button").addEventListener("click", startButtonClickHandler);
+  $("choose-privacy").addEventListener("click", () => $("privacy").showModal());
+  $("share-results").addEventListener("click", () => $("share").showModal());
+  $("copy-link").addEventListener("click", copyLinkButtonClickHandler);
+  document.querySelectorAll(".close-dialog").forEach((element) => {
+    element.addEventListener("click", () => element.closest("dialog").close());
+  });
+  // close a dialog by clicking its backdrop
+  document.querySelectorAll("dialog").forEach((dialog) => {
+    dialog.addEventListener("click", (e) => {
+      if (e.target === dialog) dialog.close();
     });
+  });
+
+  $("server").addEventListener("change", (e) => {
+    const server = testState.servers[e.target.value];
+    if (server) selectServer(server);
+  });
+
+  const chart = $("speedChart");
+  function trackPointer(e) {
+    const x = e.clientX - chart.getBoundingClientRect().left;
+    testState.hoverX = x >= 0 && x <= chart.clientWidth - CHART_PADDING.right ? x : null;
+    testState.dirty = true;
+  }
+  chart.addEventListener("pointermove", trackPointer);
+  chart.addEventListener("pointerdown", trackPointer);
+  chart.addEventListener("pointerleave", (e) => {
+    // on touch screens, keep the tooltip after the finger lifts
+    if (e.pointerType !== "mouse") return;
+    testState.hoverX = null;
+    testState.dirty = true;
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (testState.hoverX !== null && e.target !== chart) {
+      testState.hoverX = null;
+      testState.dirty = true;
+    }
+  });
+
+  // the chart's height follows the window in the wide layout, so watch the canvas itself
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => (testState.dirty = true)).observe(chart);
+  } else {
+    window.addEventListener("resize", () => (testState.dirty = true));
+  }
 }
 
 /**
@@ -80,8 +147,14 @@ function startButtonClickHandler() {
   switch (testState.state) {
     case READY:
     case FINISHED:
+      testState.testData = null;
+      testState.samples = [];
+      testState.aborted = false;
+      testState.hoverX = null;
+      testState.startedAt = performance.now();
       testState.speedtest.start();
       testState.state = RUNNING;
+      testState.dirty = true;
       return;
     case RUNNING:
       testState.speedtest.abort();
@@ -93,18 +166,19 @@ function startButtonClickHandler() {
 }
 
 /**
- * Event listener for clicks on the "Copy link" button in the modal
+ * Event listener for clicks on the "Copy link" button in the share dialog
  */
 async function copyLinkButtonClickHandler() {
-  const link = document.querySelector("img#results").src;
-  await navigator.clipboard.writeText(link);
-  const button = document.querySelector("#copy-link");
-  button.classList.add("active");
-  button.textContent = "Copied!";
-  setTimeout(() => {
-    button.classList.remove("active");
-    button.textContent = "Copy link";
-  }, 3000);
+  const button = $("copy-link");
+  try {
+    await navigator.clipboard.writeText($("share-url").value);
+    button.textContent = I18N.t("index.share.copied");
+  } catch (error) {
+    // clipboard access can be refused; leave the link selected for a manual copy
+    $("share-url").select();
+    button.textContent = I18N.t("index.share.manual");
+  }
+  setTimeout(() => (button.textContent = I18N.t("index.share.copy")), 3000);
 }
 
 /**
@@ -113,6 +187,7 @@ async function copyLinkButtonClickHandler() {
 async function applySettingsJSON() {
   try {
     const response = await fetch("settings.json");
+    if (!response.ok) return;
     const settings = await response.json();
     if (!settings || typeof settings !== "object") {
       return console.error("Settings are empty or malformed");
@@ -127,24 +202,13 @@ async function applySettingsJSON() {
         settings[setting] != "false"
       ) {
         testState.telemetryEnabled = true;
-        document.querySelector("#privacy-warning").classList.remove("hidden");
+        $("privacy-warning").hidden = false;
       }
     }
   } catch (error) {
     console.error("Failed to fetch settings:", error);
   }
 }
-
-// Server used when no server list is available, matching the classic and
-// stability pages. URLs are relative so they also work behind a URL prefix.
-const LOCAL_SERVER = {
-  name: "Local server",
-  server: "./",
-  dlURL: "backend/garbage.php",
-  ulURL: "backend/empty.php",
-  pingURL: "backend/empty.php",
-  getIpURL: "backend/getIP.php",
-};
 
 /**
  * Load server list from the configured source and populate the dropdown.
@@ -173,7 +237,8 @@ async function applyServerListJSON() {
 
     // If there's only one server, just show it. No reachability checks needed.
     if (servers.length === 1) {
-      populateDropdown(servers);
+      populateDropdown(servers, servers[0]);
+      selectServer(servers[0]);
       return;
     }
 
@@ -196,15 +261,13 @@ async function applyServerListJSON() {
       if (aliveServers.length > 0) {
         testState.servers = aliveServers;
       }
-      populateDropdown(testState.servers);
-
+      populateDropdown(testState.servers, bestServer);
 
       if (bestServer) {
         selectServer(bestServer);
       } else {
-        alert(
-          "Can't reach any of the speedtest servers! But you're on this page. Something weird is going on with your network."
-        );
+        testState.noServer = true;
+        testState.dirty = true;
       }
     });
   } catch (error) {
@@ -213,53 +276,37 @@ async function applyServerListJSON() {
 }
 
 /**
- * Add all the servers to the server selection dropdown and make it actually
- * work.
+ * Fill the server dropdown
  * @param {Array} servers - an array of server objects
+ * @param {Object|null} selected - the server to show as selected
  */
-function populateDropdown(servers) {
-  const serverSelector = document.querySelector("div.server-selector");
-  const serverList = serverSelector.querySelector("ul.servers");
+function populateDropdown(servers, selected) {
+  const select = $("server");
+  select.innerHTML = "";
 
-  // Reset previous state (populateDropdown can be called multiple times)
-  serverSelector.classList.remove("single-server");
-  serverSelector.classList.remove("active");
-  serverList.classList.remove("active");
-  serverList.innerHTML = "";
-
-  // If we have only a single server, just show it
-  if (servers.length === 1) {
-    serverSelector.classList.add("single-server");
-    selectServer(servers[0]);
-    return;
+  if (!selected) {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.setAttribute("data-i18n", "index.chooseServer");
+    placeholder.textContent = I18N.t("index.chooseServer");
+    select.appendChild(placeholder);
   }
-  serverSelector.classList.add("active");
-
-  // Make the dropdown open and close (hook only once)
-  if (serverSelector.dataset.hooked !== "1") {
-    serverSelector.dataset.hooked = "1";
-
-    serverSelector.addEventListener("click", () => {
-      serverList.classList.toggle("active");
-    });
-    document.addEventListener("click", (e) => {
-      if (e.target.closest("div.server-selector") !== serverSelector)
-        serverList.classList.remove("active");
-    });
-  }
-
-  // Populate the list to choose from
-  servers.forEach((server) => {
-    const item = document.createElement("li");
-    const link = document.createElement("a");
-    link.href = "#";
-    link.innerHTML = `${server.name}${
-      server.sponsorName ? ` <span>(${server.sponsorName})</span>` : ""
-    }`;
-    link.addEventListener("click", () => selectServer(server));
-    item.appendChild(link);
-    serverList.appendChild(item);
+  servers.forEach((server, index) => {
+    const option = document.createElement("option");
+    option.value = index;
+    if (server === LOCAL_SERVER) {
+      // the built-in fallback gets a translated name; names from a server list are shown as given
+      option.setAttribute("data-i18n", "index.localServer");
+      option.textContent = I18N.t("index.localServer");
+    } else {
+      option.textContent = server.sponsorName ? `${server.name} (${server.sponsorName})` : server.name;
+    }
+    option.selected = server === selected;
+    select.appendChild(option);
   });
+
+  // a single server is shown, not chosen
+  select.classList.toggle("single", servers.length === 1);
 }
 
 /**
@@ -268,198 +315,359 @@ function populateDropdown(servers) {
  */
 function selectServer(server) {
   testState.speedtest.setSelectedServer(server);
-  testState.selectedServerDirty = true;
+  testState.noServer = false;
   testState.state = READY;
+  testState.dirty = true;
+  showSponsor(server);
+}
+
+/**
+ * Show the sponsor of the selected server, linked only to http(s) URLs
+ * @param {Object} server - a server object
+ */
+function showSponsor(server) {
+  const sponsor = $("sponsor");
+  sponsor.textContent = "";
+  sponsor.hidden = !server.sponsorName;
+  if (!server.sponsorName) return;
+
+  sponsor.append(I18N.t("index.sponsoredBy"));
+  if (server.sponsorURL && /^https?:\/\//i.test(server.sponsorURL)) {
+    const link = document.createElement("a");
+    link.href = server.sponsorURL;
+    link.rel = "noopener";
+    link.textContent = server.sponsorName;
+    sponsor.appendChild(link);
+  } else {
+    sponsor.append(server.sponsorName);
+  }
+}
+
+/**
+ * Remember the current speed for the chart while download or upload runs
+ * @param {Object} data - status update from the speedtest worker
+ */
+function recordSample(data) {
+  const t = (performance.now() - testState.startedAt) / 1000;
+  let v = NaN;
+  let kind = null;
+  if (data.testState === 1) {
+    v = Number(data.dlStatus);
+    kind = "dl";
+  } else if (data.testState === 3) {
+    v = Number(data.ulStatus);
+    kind = "ul";
+  }
+  if (kind && data[kind + "Status"] !== "" && !isNaN(v)) {
+    testState.samples.push({ t, v, kind });
+  }
 }
 
 /**
  * Start the requestAnimationFrame UI rendering loop
  */
 function startRenderingLoop() {
-  // Do these queries once to speed up the rendering itself
-  const serverSelector = document.querySelector("div.server-selector");
-  const selectedServer = serverSelector.querySelector("#selected-server");
-  const sponsor = serverSelector.querySelector("#sponsor");
-  const startButton = document.querySelector("#start-button");
-  const privacyWarning = document.querySelector("#privacy-warning");
-
-  const gauges = document.querySelectorAll("#download-gauge, #upload-gauge");
-  const downloadProgress = document.querySelector("#download-gauge .progress");
-  const uploadProgress = document.querySelector("#upload-gauge .progress");
-  const downloadGauge = document.querySelector("#download-gauge .speed");
-  const uploadGauge = document.querySelector("#upload-gauge .speed");
-  const downloadText = document.querySelector("#download-gauge span");
-  const uploadText = document.querySelector("#upload-gauge span");
-
-  const pingAndJitter = document.querySelectorAll(".ping, .jitter");
-  const ping = document.querySelector("#ping");
-  const jitter = document.querySelector("#jitter");
-  const shareResults = document.querySelector("#share-results");
-  const copyLink = document.querySelector("#copy-link");
-  const resultsImage = document.querySelector("#results");
-
   const buttonTexts = {
-    [INITIALIZING]: "Loading...",
-    [READY]: "Let's start",
-    [RUNNING]: "Abort",
-    [FINISHED]: "Restart",
+    [INITIALIZING]: "btn.loading",
+    [READY]: "btn.start",
+    [RUNNING]: "btn.stop",
+    [FINISHED]: "btn.start",
   };
 
-  // Show copy link button only if navigator.clipboard is available
-  copyLink.classList.toggle("hidden", !navigator.clipboard);
-
   function renderUI() {
-    // Make the main button reflect the current state
-    startButton.textContent = buttonTexts[testState.state];
-    startButton.classList.toggle("disabled", testState.state === INITIALIZING);
-    startButton.classList.toggle("active", testState.state === RUNNING);
-
-    // Disable the server selector while test is running
-    serverSelector.classList.toggle("disabled", testState.state === RUNNING);
-
-    // Show selected server
-    if (testState.selectedServerDirty) {
-      const server = testState.speedtest.getSelectedServer();
-      selectedServer.textContent = server.name;
-      if (server.sponsorName) {
-        if (server.sponsorURL) {
-          sponsor.innerHTML = `Sponsor: <a href="${server.sponsorURL}">${server.sponsorName}</a>`;
-        } else {
-          sponsor.textContent = `Sponsor: ${server.sponsorName}`;
-        }
-      } else {
-        sponsor.innerHTML = "&nbsp;";
-      }
-      testState.selectedServerDirty = false;
+    // the elapsed time ticks while the test runs, everything else only changes on events
+    if (testState.state === RUNNING) {
+      $("elapsed").textContent = formatTime((performance.now() - testState.startedAt) / 1000);
     }
-
-    // Activate the gauges when test running or finished
-    gauges.forEach((e) =>
-      e.classList.toggle(
-        "enabled",
-        testState.state === RUNNING || testState.state === FINISHED
-      )
-    );
-
-    // Show ping and jitter if data is available
-    pingAndJitter.forEach((e) =>
-      e.classList.toggle(
-        "hidden",
-        !(
-          testState.testData &&
-          testState.testData.pingStatus &&
-          testState.testData.jitterStatus
-        )
-      )
-    );
-
-    // Show share button after test if server supports it
-    shareResults.classList.toggle(
-      "hidden",
-      !(
-        testState.state === FINISHED &&
-        testState.telemetryEnabled &&
-        testState.testData.testId
-      )
-    );
-
-    if (testState.testDataDirty) {
-      // Set gauge rotations
-      downloadProgress.style = `--progress-rotation: ${
-        testState.testData.dlProgress * 180
-      }deg`;
-      uploadProgress.style = `--progress-rotation: ${
-        testState.testData.ulProgress * 180
-      }deg`;
-      downloadGauge.style = `--speed-rotation: ${mbpsToRotation(
-        testState.testData.dlStatus,
-        testState.testData.testState === 1
-      )}deg`;
-      uploadGauge.style = `--speed-rotation: ${mbpsToRotation(
-        testState.testData.ulStatus,
-        testState.testData.testState === 3
-      )}deg`;
-
-      // Set numeric values
-      downloadText.textContent = numberToText(testState.testData.dlStatus);
-      uploadText.textContent = numberToText(testState.testData.ulStatus);
-      ping.textContent = numberToText(testState.testData.pingStatus);
-      jitter.textContent = numberToText(testState.testData.jitterStatus);
-
-      // Set user's IP and provider
-      if (testState.testData.clientIp) {
-        // Clear previous content
-        privacyWarning.innerHTML = '';
-
-        const connectedThrough = document.createElement('span');
-        connectedThrough.textContent = 'You are connected through:';
-  
-        const ipAddress = document.createTextNode(testState.testData.clientIp);
-
-        privacyWarning.appendChild(connectedThrough);
-        privacyWarning.appendChild(document.createElement('br'));
-        privacyWarning.appendChild(ipAddress);
-  
-        privacyWarning.classList.remove("hidden");
-      }
-
-      // Set image for sharing results
-      if (testState.testData.testId) {
-        resultsImage.src =
-          window.location.href.substring(
-            0,
-            window.location.href.lastIndexOf("/")
-          ) +
-          "/results/?id=" +
-          testState.testData.testId;
-      }
-
-      testState.testDataDirty = false;
+    if (testState.dirty) {
+      testState.dirty = false;
+      renderControls(buttonTexts);
+      renderResults();
+      drawChart();
     }
-
     requestAnimationFrame(renderUI);
   }
 
   renderUI();
 }
 
+function renderControls(buttonTexts) {
+  const state = testState.state;
+  const data = testState.testData;
+
+  const startButton = $("start-button");
+  startButton.textContent = I18N.t(testState.noServer ? "btn.noServer" : buttonTexts[state]);
+  startButton.disabled = state === INITIALIZING;
+  startButton.classList.toggle("running", state === RUNNING);
+
+  // the server can't change during a test, and a single server is shown, not chosen
+  const select = $("server");
+  select.disabled = state === RUNNING || select.options.length <= 1 || (state === INITIALIZING && !testState.noServer);
+
+  // overall progress across the phases the worker reports
+  let progress = 0;
+  if (state === FINISHED) progress = 1;
+  else if (data) progress = (Number(data.dlProgress) + Number(data.ulProgress) + Number(data.pingProgress)) / 3;
+  const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  $("progress-bar").style.width = pct + "%";
+  $("progress-track").setAttribute("aria-valuenow", pct);
+  $("progress-percent").textContent = pct + "%";
+  if (state !== RUNNING && !data) $("elapsed").textContent = "00:00";
+
+  renderStatus();
+
+  // Show share button after test if server supports it
+  const testId = data && data.testId;
+  $("share-results").hidden = !(state === FINISHED && testState.telemetryEnabled && testId);
+  if (testId) {
+    // the image is drawn in the page's language
+    const lang = I18N.lang() === "en" ? "" : "&lang=" + I18N.lang();
+    const url =
+      window.location.href.substring(0, window.location.href.lastIndexOf("/")) + "/results/?id=" + testId + lang;
+    if ($("share-url").value !== url) {
+      $("share-url").value = url;
+      $("results").src = url;
+    }
+  }
+}
+
+function renderStatus() {
+  const data = testState.testData;
+  let cls = "idle";
+  let title;
+  let text;
+
+  if (testState.noServer) {
+    cls = "bad";
+    title = I18N.t("index.status.noServer");
+    text = I18N.t("index.status.noServerText");
+  } else if (testState.state === INITIALIZING) {
+    title = I18N.t("index.status.loading");
+    text = I18N.t("server.findingBest");
+  } else if (testState.state === RUNNING) {
+    const phase = data ? data.testState : 0;
+    const phases = { 1: "index.status.download", 2: "index.status.ping", 3: "index.status.upload" };
+    title = I18N.t(phases[phase] || "index.status.starting");
+    text = I18N.t("index.status.running");
+  } else if (testState.state === FINISHED && data) {
+    cls = "ok";
+    title = I18N.t("index.status.complete");
+    const parts = [];
+    const results = [
+      ["index.summary.download", data.dlStatus],
+      ["index.summary.upload", data.ulStatus],
+      ["index.summary.ping", data.pingStatus],
+      ["index.summary.jitter", data.jitterStatus],
+    ];
+    for (const [key, value] of results) {
+      if (formatNumber(value) !== "--") parts.push(I18N.t(key, { v: formatNumber(value) }));
+    }
+    text = parts.length ? capitalize(parts.join(", ")) + "." : I18N.t("index.status.none");
+  } else if (testState.aborted) {
+    title = I18N.t("status.stopped");
+    text = I18N.t("index.status.stoppedText");
+  } else {
+    title = I18N.t("status.ready");
+    text = I18N.t("index.status.readyText");
+  }
+
+  $("status").className = "verdict " + cls;
+  $("status-title").textContent = title;
+  $("status-text").textContent = text;
+}
+
+function renderResults() {
+  const data = testState.testData || {};
+  setStat("download-speed", formatNumber(data.dlStatus));
+  setStat("upload-speed", formatNumber(data.ulStatus));
+  setStat("ping", formatNumber(data.pingStatus));
+  setStat("jitter", formatNumber(data.jitterStatus));
+  $("download-progress").style.width = Math.round((Number(data.dlProgress) || 0) * 100) + "%";
+  $("upload-progress").style.width = Math.round((Number(data.ulProgress) || 0) * 100) + "%";
+
+  const clientIp = $("client-ip");
+  clientIp.textContent = data.clientIp || I18N.t("index.connectionEmpty");
+  clientIp.classList.toggle("empty", !data.clientIp);
+}
+
+// units are hidden until there is a value to go with them
+function setStat(id, text) {
+  const el = $(id);
+  el.textContent = text;
+  el.parentNode.classList.toggle("empty", text === "--");
+}
+
 /**
- * Convert a speed in Mbits per second to a rotation for the gauge
- * @param {string} speed Speed in Mbits
- * @param {boolean} oscillate If the gauge should wiggle a bit
- * @returns {number} Rotation for the gauge in degrees
+ * Draw download and upload speed over time, in CSS pixels
  */
-function mbpsToRotation(speed, oscillate) {
-  speed = Number(speed);
-  if (speed <= 0) return 0;
+function drawChart() {
+  const canvas = $("speedChart");
+  const ctx = canvas.getContext("2d");
+  const dp = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dp) || canvas.height !== Math.round(h * dp)) {
+    canvas.width = Math.round(w * dp);
+    canvas.height = Math.round(h * dp);
+  }
+  ctx.setTransform(dp, 0, 0, dp, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+  ctx.lineWidth = 1;
 
-  const minSpeed = 0;
-  const maxSpeed = 10000; // 10 Gbps maxes out the gauge
-  const minRotation = 0;
-  const maxRotation = 180;
+  const samples = testState.samples;
+  let maxV = 0;
+  for (const s of samples) if (s.v > maxV) maxV = s.v;
+  const scale = niceScale(maxV);
+  const lastT = samples.length ? samples[samples.length - 1].t : 0;
+  const timeEnd = Math.max(MIN_CHART_SECONDS, Math.ceil(lastT / 5) * 5);
 
-  // Can't do log10 of values less than one, +1 all to keep it fair
-  const logMinSpeed = Math.log10(minSpeed + 1);
-  const logMaxSpeed = Math.log10(maxSpeed + 1);
-  const logSpeed = Math.log10(speed + 1);
+  // leave room on the left for the widest value label
+  const padL = Math.ceil(ctx.measureText(formatAxis(scale.max)).width) + 14;
+  const padT = CHART_PADDING.top;
+  const plotW = w - padL - CHART_PADDING.right;
+  const plotH = h - padT - CHART_PADDING.bottom;
+  const baseY = padT + plotH;
+  const xFor = (t) => padL + (t / timeEnd) * plotW;
+  const yFor = (v) => baseY - (v / scale.max) * plotH;
 
-  const power = (logSpeed - logMinSpeed) / (logMaxSpeed - logMinSpeed);
-  const oscillation = oscillate ? 1 + 0.01 * Math.sin(Date.now() / 100) : 1;
-  const rotation = power * oscillation * maxRotation;
+  // horizontal grid lines with value labels
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for (let v = 0; v <= scale.max + scale.step / 2; v += scale.step) {
+    const y = Math.round(yFor(v)) + 0.5;
+    ctx.strokeStyle = CHART_COLORS.grid;
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(padL + plotW, y);
+    ctx.stroke();
+    ctx.fillStyle = CHART_COLORS.text;
+    ctx.fillText(formatAxis(v), padL - 8, y);
+  }
 
-  // Make sure we stay within bounds at all times
-  return Math.max(Math.min(rotation, maxRotation), minRotation);
+  // time labels, kept inside the canvas at both ends
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  const maxLabels = Math.floor(plotW / (ctx.measureText("00:00").width + 24)) + 1;
+  const intervals = [5, 10, 15, 20, 30, 60];
+  let tickInterval = intervals[intervals.length - 1];
+  for (const interval of intervals) {
+    if (timeEnd / interval + 1 <= maxLabels) {
+      tickInterval = interval;
+      break;
+    }
+  }
+  for (let t = 0; t <= timeEnd; t += tickInterval) {
+    const label = formatTime(t);
+    const half = ctx.measureText(label).width / 2;
+    ctx.fillText(label, Math.min(Math.max(xFor(t), padL + half), padL + plotW - half), baseY + 8);
+  }
+
+  const tooltip = $("chart-tooltip");
+  if (samples.length === 0) {
+    tooltip.hidden = true;
+    return;
+  }
+
+  // one filled line per phase
+  for (const kind of ["dl", "ul"]) {
+    const points = samples.filter((s) => s.kind === kind);
+    if (points.length === 0) continue;
+    const color = kind === "dl" ? CHART_COLORS.download : CHART_COLORS.upload;
+    const fill = kind === "dl" ? CHART_COLORS.downloadFill : CHART_COLORS.uploadFill;
+    const fillEnd = kind === "dl" ? CHART_COLORS.downloadFillEnd : CHART_COLORS.uploadFillEnd;
+
+    const gradient = ctx.createLinearGradient(0, padT, 0, baseY);
+    gradient.addColorStop(0, fill);
+    gradient.addColorStop(1, fillEnd);
+    ctx.beginPath();
+    ctx.moveTo(xFor(points[0].t), baseY);
+    for (const p of points) ctx.lineTo(xFor(p.t), yFor(p.v));
+    ctx.lineTo(xFor(points[points.length - 1].t), baseY);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    ctx.beginPath();
+    points.forEach((p, i) => (i === 0 ? ctx.moveTo(xFor(p.t), yFor(p.v)) : ctx.lineTo(xFor(p.t), yFor(p.v))));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+
+  // hover crosshair and tooltip on the nearest sample
+  if (testState.hoverX === null || testState.hoverX < padL) {
+    tooltip.hidden = true;
+    return;
+  }
+  const hoverT = ((testState.hoverX - padL) / plotW) * timeEnd;
+  let nearest = samples[0];
+  for (const s of samples) {
+    if (Math.abs(s.t - hoverT) < Math.abs(nearest.t - hoverT)) nearest = s;
+  }
+  const nx = xFor(nearest.t);
+  const ny = yFor(nearest.v);
+  ctx.strokeStyle = CHART_COLORS.reference;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(Math.round(nx) + 0.5, padT);
+  ctx.lineTo(Math.round(nx) + 0.5, baseY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(nx, ny, 4, 0, Math.PI * 2);
+  ctx.fillStyle = nearest.kind === "dl" ? CHART_COLORS.download : CHART_COLORS.upload;
+  ctx.fill();
+  ctx.strokeStyle = CHART_COLORS.surface;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  $("tooltip-label").textContent = formatTime(nearest.t) + " " + I18N.t(nearest.kind === "dl" ? "index.download" : "index.upload");
+  $("tooltip-value").textContent = formatNumber(nearest.v) + " " + I18N.t("unit.mbps");
+  tooltip.hidden = false;
+  const half = tooltip.offsetWidth / 2;
+  tooltip.style.left = Math.min(Math.max(nx, half), w - half) + "px";
+  tooltip.style.top = Math.max(ny, tooltip.offsetHeight + 12) + "px";
+}
+
+/**
+ * Pick a round axis maximum and step with about four grid lines
+ * @param {number} max - the largest value to show
+ */
+function niceScale(max) {
+  max = Math.max(max * 1.15, 10);
+  const raw = max / 4;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / magnitude;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * magnitude;
+  return { step, max: Math.ceil(max / step) * step };
+}
+
+function formatAxis(v) {
+  v = Math.round(v * 10) / 10;
+  return I18N.num(v, Number.isInteger(v) ? 0 : 1);
+}
+
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
 }
 
 /**
  * Convert a number to a user friendly version
- * @param {string} value Speed, ping or jitter
- * @returns {string} A text version with proper decimals
+ * @param {string|number} value Speed, ping or jitter
+ * @returns {string} A text version with proper decimals, or "--" when there is none
  */
-function numberToText(value) {
-  if (!value) return "00";
+function formatNumber(value) {
+  // "" means not measured yet; 0 is a real result (jitter on a quiet link)
+  if (value === "" || value === null || value === undefined) return "--";
   value = Number(value);
-  if (value < 10) return value.toFixed(2);
-  if (value < 100) return value.toFixed(1);
-  return value.toFixed(0);
+  if (isNaN(value) || value < 0) return "--";
+  return I18N.num(value, value < 10 ? 2 : value < 100 ? 1 : 0);
+}
+
+function capitalize(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

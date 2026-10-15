@@ -1,152 +1,1217 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Free and Open Source Speedtest. Run it right now in your browser, or self-host on a PHP, Golang, Rust or Node server. License: LGPL."
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="icon" href="images/favicon.svg" />
+    <title data-i18n="index.title">LibreSpeed - Free and Open Source Speedtest</title>
+    <script type="text/javascript" src="speedtest.js"></script>
+    <script type="text/javascript">
+      // Set this to a different URL to load the server list from another location.
+      var SPEEDTEST_SERVERS = "server-list.json";
+    </script>
+    <script type="text/javascript" src="javascript/i18n.js"></script>
+    <script type="text/javascript" src="javascript/index.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-start: #0f172a;
+        --bg-mid: #1e293b;
+        --surface: #1e293b;
+        --raised: rgba(51, 65, 85, 0.5);
+        --raised-hover: #334155;
+        --inset: #0f172a;
+        --border: #334155;
+        --text: #e2e8f0;
+        --text-strong: #ffffff;
+        --text-soft: #cbd5e1;
+        --text-muted: #94a3b8;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --link: #60a5fa;
+        --link-hover: #93c5fd;
+        --stop: #e11d48;
+        --stop-hover: #be123c;
+        --ok: #34d399;
+        --warn: #fbbf24;
+        --bad: #fb7185;
+        --download: #3b82f6;
+        --upload: #f59e0b;
+      }
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-  <meta name="description"
-    content="Free and Open Source Speedtest. Run it right now in your browser, or self-host on a PHP, Golang, Rust or Node server. License: LGPL." />
-  <link rel="shortcut icon" href="images/favicon.svg" />
-  <script type="text/javascript" src="speedtest.js"></script>
-  <script type="text/javascript">
-    // Set this to a different URL to load the server list from another location.
-    var SPEEDTEST_SERVERS = "server-list.json";
-  </script>
-  <script type="text/javascript" src="javascript/index.js"></script>
-  <link rel="stylesheet" type="text/css" href="styling/index.css" />
-  <title>LibreSpeed - Free and Open Source Speedtest</title>
-</head>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-<body>
-  <header>
-    <img src="images/logo.svg" alt="LibreSpeed" />
-  </header>
-  <main>
-    <h1>Free and Open Source Speedtest.</h1>
-    <p class="tagline">No Flash, No Java, No Websockets, No Bullsh*t</p>
+      body {
+        font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+          "Noto Color Emoji";
+        min-height: 100vh;
+        background: linear-gradient(to bottom right, var(--bg-start), var(--bg-mid), var(--bg-start)) fixed;
+        color: var(--text);
+        line-height: 1.5;
+      }
 
-    <div class="server-selector">
-      <div class="chosen">
-        <div class="chevron">
-          <img src="images/chevron.svg" alt="select..." />
+      a {
+        color: var(--link);
+        text-decoration: none;
+        transition: color 0.15s ease;
+      }
+
+      a:hover {
+        color: var(--link-hover);
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--link);
+        outline-offset: 2px;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      /* Layout: one column on small screens, a dashboard that fits the window on large ones */
+
+      .page {
+        max-width: 48rem;
+        margin: 0 auto;
+        padding: 1rem 1rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      /* the column wrappers only matter in the wide layout; here the cards are ordered directly */
+      .col-side,
+      .col-main {
+        display: contents;
+      }
+
+      .topbar {
+        order: 0;
+      }
+      .controls {
+        order: 1;
+      }
+      .results {
+        order: 2;
+      }
+      .chart-card {
+        order: 3;
+      }
+      .connection {
+        order: 4;
+      }
+      .footer {
+        order: 5;
+      }
+
+      .topbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem 1rem;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        min-width: 0;
+      }
+
+      .icon-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 3rem;
+        height: 3rem;
+        flex-shrink: 0;
+        background-color: var(--accent);
+        border-radius: 0.875rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      }
+
+      .icon-box svg {
+        width: 1.5rem;
+        height: 1.5rem;
+        color: #fff;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-strong);
+        line-height: 1.2;
+      }
+
+      .subtitle {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+      }
+
+      .nav-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .nav-link svg {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .lang-switch {
+        display: inline-flex;
+        gap: 0.25rem;
+        padding: 0.25rem;
+        background-color: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+      }
+
+      .lang-switch button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 1.75rem;
+        border: 0;
+        border-radius: 0.5rem;
+        background: none;
+        cursor: pointer;
+        opacity: 0.5;
+        transition:
+          background-color 0.15s ease,
+          opacity 0.15s ease;
+      }
+
+      .lang-switch button:hover {
+        opacity: 0.85;
+      }
+
+      .lang-switch button[aria-pressed="true"] {
+        background-color: var(--raised-hover);
+        opacity: 1;
+      }
+
+      .lang-switch svg {
+        display: block;
+        width: 1.3125rem;
+        height: 0.875rem;
+        border-radius: 2px;
+      }
+
+      .card {
+        background-color: var(--surface);
+        border-radius: 1.25rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        padding: 1.25rem 1.5rem;
+        border: 1px solid var(--border);
+      }
+
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1.25rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .card-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-strong);
+        line-height: 1.3;
+      }
+
+      .card-note {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+      }
+
+      /* Controls */
+
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .field label {
+        display: block;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-bottom: 0.375rem;
+      }
+
+      select {
+        width: 100%;
+        appearance: none;
+        font: inherit;
+        color: var(--text-strong);
+        background: var(--inset)
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+          no-repeat right 0.75rem center / 1rem;
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 0.625rem 2.25rem 0.625rem 0.875rem;
+        cursor: pointer;
+        text-overflow: ellipsis;
+        transition: border-color 0.15s ease;
+      }
+
+      select:hover:not(:disabled) {
+        border-color: #475569;
+      }
+
+      select:disabled {
+        color: var(--text-muted);
+        cursor: not-allowed;
+      }
+
+      /* a single server is shown, not chosen */
+      select.single:disabled {
+        color: var(--text-strong);
+        background-image: none;
+        padding-right: 0.875rem;
+        cursor: default;
+      }
+
+      .sponsor {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        margin-top: 0.375rem;
+      }
+
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        font: inherit;
+        font-weight: 600;
+        border-radius: 0.75rem;
+        border: 1px solid transparent;
+        padding: 0.625rem 1.25rem;
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+          background-color 0.15s ease,
+          border-color 0.15s ease,
+          opacity 0.15s ease;
+      }
+
+      .btn svg {
+        width: 1.125rem;
+        height: 1.125rem;
+      }
+
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        flex: 1;
+        background-color: var(--accent);
+        color: #fff;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background-color: var(--accent-hover);
+      }
+
+      .btn-primary.running {
+        background-color: var(--stop);
+      }
+
+      .btn-primary.running:hover {
+        background-color: var(--stop-hover);
+      }
+
+      .btn-secondary {
+        background-color: var(--raised);
+        border-color: var(--border);
+        color: var(--text);
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background-color: var(--raised-hover);
+      }
+
+      .btn-link {
+        font: inherit;
+        color: var(--link);
+        background: none;
+        border: 0;
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .btn-link:hover {
+        color: var(--link-hover);
+      }
+
+      .progress {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .progress-track {
+        flex: 1;
+        height: 0.375rem;
+        background-color: var(--inset);
+        border-radius: 9999px;
+        overflow: hidden;
+      }
+
+      .progress-bar {
+        height: 100%;
+        width: 0;
+        background-color: var(--download);
+        border-radius: 9999px;
+        transition: width 0.2s linear;
+      }
+
+      /* Status */
+
+      .verdict {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid;
+      }
+
+      .verdict svg {
+        display: none;
+        width: 1.375rem;
+        height: 1.375rem;
+        flex-shrink: 0;
+        margin-top: 0.0625rem;
+      }
+
+      .verdict-title {
+        font-weight: 600;
+      }
+
+      .verdict-text {
+        font-size: 0.8125rem;
+        color: var(--text-soft);
+      }
+
+      .verdict.idle {
+        background-color: var(--raised);
+        border-color: var(--border);
+      }
+
+      .verdict.idle .verdict-title {
+        color: var(--text-strong);
+      }
+
+      .verdict.idle .verdict-text {
+        color: var(--text-muted);
+      }
+
+      .verdict.idle .icon-idle {
+        display: block;
+        color: var(--text-muted);
+      }
+
+      .verdict.ok {
+        background-color: rgba(16, 185, 129, 0.1);
+        border-color: rgba(16, 185, 129, 0.4);
+      }
+
+      .verdict.ok .verdict-title,
+      .verdict.ok .icon-ok {
+        display: block;
+        color: var(--ok);
+      }
+
+      .verdict.bad {
+        background-color: rgba(244, 63, 94, 0.1);
+        border-color: rgba(244, 63, 94, 0.4);
+      }
+
+      .verdict.bad .verdict-title,
+      .verdict.bad .icon-bad {
+        display: block;
+        color: var(--bad);
+      }
+
+      /* Connection info, rows like the IP page */
+
+      .info-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background-color: var(--raised);
+        border-radius: 0.75rem;
+        padding: 0.75rem 0.875rem;
+      }
+
+      .info-label {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+      }
+
+      .info-value {
+        color: var(--text-strong);
+        font-weight: 500;
+        overflow-wrap: anywhere;
+      }
+
+      .info-value.empty {
+        color: var(--text-muted);
+        font-weight: 400;
+        font-size: 0.875rem;
+      }
+
+      .privacy-note {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        margin-top: 0.75rem;
+      }
+
+      /* Stats */
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+      }
+
+      .stat {
+        background-color: var(--raised);
+        border-radius: 0.75rem;
+        padding: 0.625rem 0.875rem;
+        transition: background-color 0.15s ease;
+        min-width: 0;
+      }
+
+      .stat.main {
+        padding: 0.875rem 1rem;
+      }
+
+      .stat:hover {
+        background-color: var(--raised-hover);
+      }
+
+      .stat-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .stat-icon {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .stat-icon svg {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .stat-icon.blue {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+      }
+
+      .stat-icon.amber {
+        background-color: rgba(245, 158, 11, 0.2);
+        color: #fbbf24;
+      }
+
+      .stat-icon.purple {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #a78bfa;
+      }
+
+      .stat-icon.green {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+      }
+
+      .stat-icon.slate {
+        background-color: rgba(148, 163, 184, 0.15);
+        color: var(--text-soft);
+      }
+
+      .stat-label {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .stat-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-strong);
+        line-height: 1.25;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .stat.main .stat-value {
+        font-size: 2.25rem;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      .stat-value.empty .stat-unit {
+        visibility: hidden;
+      }
+
+      .stat-unit {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-left: 0.25rem;
+      }
+
+      .phase {
+        height: 0.25rem;
+        margin-top: 0.625rem;
+        background-color: var(--inset);
+        border-radius: 9999px;
+        overflow: hidden;
+      }
+
+      .phase > div {
+        height: 100%;
+        width: 0;
+        border-radius: 9999px;
+        transition: width 0.2s linear;
+      }
+
+      .phase.download > div {
+        background-color: var(--download);
+      }
+
+      .phase.upload > div {
+        background-color: var(--upload);
+      }
+
+      /* Chart */
+
+      .key {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem 1rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        list-style: none;
+      }
+
+      .key li {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+      }
+
+      .swatch {
+        display: inline-block;
+        width: 1rem;
+        height: 2px;
+        border-radius: 1px;
+        flex-shrink: 0;
+      }
+
+      .swatch.download {
+        background-color: var(--download);
+      }
+
+      .swatch.upload {
+        background-color: var(--upload);
+      }
+
+      .chart {
+        position: relative;
+      }
+
+      #speedChart {
+        display: block;
+        width: 100%;
+        height: 260px;
+        touch-action: pan-y;
+      }
+
+      .tooltip {
+        position: absolute;
+        pointer-events: none;
+        background-color: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 0.375rem 0.625rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+        transform: translate(-50%, calc(-100% - 12px));
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .tooltip strong {
+        color: var(--text-strong);
+        font-weight: 600;
+        margin-left: 0.375rem;
+      }
+
+      .footer {
+        text-align: center;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+      }
+
+      /* Dialogs */
+
+      dialog {
+        margin: auto;
+        width: min(40rem, calc(100vw - 2rem));
+        max-height: calc(100vh - 2rem);
+        background-color: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 1.25rem;
+        padding: 1.25rem 1.5rem 1.5rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        scrollbar-color: #475569 transparent;
+      }
+
+      dialog::backdrop {
+        background-color: rgba(2, 6, 23, 0.7);
+      }
+
+      .dialog-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .icon-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        flex-shrink: 0;
+        color: var(--text-muted);
+        background: none;
+        border: 0;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        transition:
+          background-color 0.15s ease,
+          color 0.15s ease;
+      }
+
+      .icon-btn:hover {
+        background-color: var(--raised-hover);
+        color: var(--text-strong);
+      }
+
+      .icon-btn svg {
+        width: 1.25rem;
+        height: 1.25rem;
+      }
+
+      #results {
+        display: block;
+        max-width: 100%;
+        margin: 0 auto 1rem;
+        border-radius: 0.75rem;
+      }
+
+      .share-row {
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      .share-row .btn {
+        flex: 0 0 auto;
+      }
+
+      .share-row input {
+        flex: 1;
+        min-width: 0;
+        font: inherit;
+        font-size: 0.875rem;
+        color: var(--text-soft);
+        background-color: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 0.625rem 0.875rem;
+      }
+
+      .policy h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-strong);
+        margin: 1.25rem 0 0.375rem;
+      }
+
+      .policy p,
+      .policy li {
+        font-size: 0.875rem;
+        color: var(--text-soft);
+      }
+
+      .policy p + p {
+        margin-top: 0.5rem;
+      }
+
+      .policy ul {
+        margin: 0.375rem 0 0.5rem 1.25rem;
+      }
+
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .animate-fade-in {
+        animation: fade-in 0.5s ease-out;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .animate-fade-in {
+          animation: none;
+        }
+        .progress-bar,
+        .phase > div {
+          transition: none;
+        }
+      }
+
+      /* Wide screens: controls on the left, results and a chart filling the rest of the window on the right */
+      @media screen and (min-width: 960px) {
+        .page {
+          max-width: 80rem;
+          min-height: 100vh;
+          min-height: 100dvh;
+          padding: 1rem 1.5rem;
+          display: grid;
+          grid-template-columns: 24rem minmax(0, 1fr);
+          grid-template-rows: auto 1fr;
+          gap: 1rem 1.25rem;
+        }
+        .topbar {
+          grid-column: 1 / -1;
+        }
+        .col-side,
+        .col-main {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          min-width: 0;
+        }
+        .footer {
+          margin-top: auto;
+          text-align: left;
+        }
+        .chart-card {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-height: 16rem;
+        }
+        .chart {
+          flex: 1;
+          min-height: 10rem;
+        }
+        #speedChart {
+          position: absolute;
+          inset: 0;
+          height: 100%;
+        }
+      }
+
+      @media screen and (max-width: 640px) {
+        .card {
+          padding: 1rem 1.125rem;
+        }
+        dialog {
+          padding: 1rem 1.125rem 1.25rem;
+        }
+        .stats {
+          gap: 0.625rem;
+        }
+        .stat.main {
+          padding: 0.75rem;
+        }
+        .stat.main .stat-value {
+          font-size: 1.625rem;
+        }
+        #speedChart {
+          height: 200px;
+        }
+      }
+
+      /* narrow phones: the main stats become rows, like the info rows on the IP page */
+      @media screen and (max-width: 400px) {
+        .page {
+          padding-left: 0.75rem;
+          padding-right: 0.75rem;
+        }
+        .topbar-actions {
+          order: -1;
+          flex-basis: 100%;
+          justify-content: space-between;
+        }
+        .icon-box {
+          width: 2.5rem;
+          height: 2.5rem;
+          border-radius: 0.75rem;
+        }
+        .icon-box svg {
+          width: 1.25rem;
+          height: 1.25rem;
+        }
+        h1 {
+          font-size: 1.25rem;
+        }
+        .card {
+          padding: 1rem;
+        }
+        .stat.main {
+          grid-column: 1 / -1;
+          display: grid;
+          grid-template-columns: auto 1fr;
+          align-items: center;
+          gap: 0 0.75rem;
+        }
+        .stat.main .stat-head {
+          margin-bottom: 0;
+          gap: 0.75rem;
+        }
+        .stat.main .stat-value {
+          font-size: 1.5rem;
+          text-align: right;
+        }
+        .stat.main .phase {
+          grid-column: 1 / -1;
+        }
+        .share-row {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <div class="icon-box" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12 14 4-4"></path>
+              <path d="M3.34 19a10 10 0 1 1 17.32 0"></path>
+            </svg>
+          </div>
+          <div>
+            <h1>LibreSpeed</h1>
+            <p class="subtitle" data-i18n="index.tagline">No Flash, No Java, No Websockets, No Bullsh*t.</p>
+          </div>
         </div>
-        <p>current server</p>
-        <h2 id="selected-server">searching nearest server...</h2>
+        <div class="topbar-actions">
+        <a class="nav-link" href="stability.html">
+          <span data-i18n="nav.stability">Stability test</span>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14"></path>
+            <path d="m12 5 7 7-7 7"></path>
+          </svg>
+        </a>
+          <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:lang.label">
+            <button type="button" data-lang="en" lang="en" aria-pressed="true" aria-label="English" title="English">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <clipPath id="flag-gb-clip"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"></path></clipPath>
+                <path d="M0,0 v30 h60 v-30 z" fill="#012169"></path>
+                <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"></path>
+                <path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#flag-gb-clip)" stroke="#C8102E" stroke-width="4"></path>
+                <path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"></path>
+                <path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"></path>
+              </svg>
+            </button>
+            <button type="button" data-lang="uk" lang="uk" aria-pressed="false" aria-label="Українська" title="Українська">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" aria-hidden="true">
+                <rect width="3" height="1" fill="#0057B7"></rect>
+                <rect y="1" width="3" height="1" fill="#FFD700"></rect>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div class="col-side">
+        <section class="card controls animate-fade-in" aria-label="Test settings" data-i18n-attr="aria-label:aria.testSettings">
+          <div class="field">
+            <label for="server" data-i18n="field.server">Server</label>
+            <select id="server" disabled>
+              <option value="" data-i18n="server.findingBest">Finding the best server…</option>
+            </select>
+            <p class="sponsor" id="sponsor" hidden></p>
+          </div>
+
+          <div class="actions">
+            <button type="button" id="start-button" class="btn btn-primary" disabled>Loading…</button>
+            <button type="button" id="share-results" class="btn btn-secondary" hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line>
+                <line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line>
+              </svg>
+              <span data-i18n="index.share">Share</span>
+            </button>
+          </div>
+
+          <div class="progress">
+            <span id="elapsed">00:00</span>
+            <div class="progress-track" role="progressbar" aria-label="Test progress" data-i18n-attr="aria-label:aria.progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-track">
+              <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <span id="progress-percent">0%</span>
+          </div>
+
+          <div class="verdict idle" id="status" role="status">
+            <svg class="icon-idle" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 16v-4"></path>
+              <path d="M12 8h.01"></path>
+            </svg>
+            <svg class="icon-ok" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="m9 12 2 2 4-4"></path>
+            </svg>
+            <svg class="icon-bad" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="m15 9-6 6"></path>
+              <path d="m9 9 6 6"></path>
+            </svg>
+            <div>
+              <p class="verdict-title" id="status-title">Loading</p>
+              <p class="verdict-text" id="status-text">Finding the best server…</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card connection animate-fade-in" aria-label="Your connection" data-i18n-attr="aria-label:index.connection">
+          <div class="info-row">
+            <div class="stat-icon slate" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+                <path d="M2 12h20"></path>
+              </svg>
+            </div>
+            <div>
+              <p class="info-label" data-i18n="index.connection">Your connection</p>
+              <p class="info-value empty" id="client-ip">Shown when the test starts</p>
+            </div>
+          </div>
+          <p class="privacy-note" id="privacy-warning" hidden>
+            <span data-i18n="index.privacyNote">Results are recorded when the test finishes. By starting the test you agree to the</span>
+            <button type="button" class="btn-link" id="choose-privacy" data-i18n="index.privacyLink">privacy policy</button>.
+          </p>
+        </section>
+
+        <footer class="footer">
+          <p><a href="stability.html" data-i18n="nav.stability">Stability test</a> · <a href="https://github.com/sprytnyk/speedtest-go" data-i18n="footer.source">Source code</a></p>
+        </footer>
       </div>
-      <ul class="servers"></ul>
-      <p class="sponsor" id="sponsor">&nbsp;</p>
+
+      <div class="col-main">
+        <section class="card results animate-fade-in" aria-label="Results" data-i18n-attr="aria-label:aria.results">
+          <div class="stats">
+            <div class="stat main">
+              <div class="stat-head">
+                <div class="stat-icon blue" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14"></path>
+                    <path d="m19 12-7 7-7-7"></path>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="index.download">Download</p>
+              </div>
+              <p class="stat-value"><span id="download-speed">--</span><span class="stat-unit" data-i18n="unit.mbps">Mbps</span></p>
+              <div class="phase download" aria-hidden="true"><div id="download-progress"></div></div>
+            </div>
+            <div class="stat main">
+              <div class="stat-head">
+                <div class="stat-icon amber" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m5 12 7-7 7 7"></path>
+                    <path d="M12 19V5"></path>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="index.upload">Upload</p>
+              </div>
+              <p class="stat-value"><span id="upload-speed">--</span><span class="stat-unit" data-i18n="unit.mbps">Mbps</span></p>
+              <div class="phase upload" aria-hidden="true"><div id="upload-progress"></div></div>
+            </div>
+            <div class="stat">
+              <div class="stat-head">
+                <div class="stat-icon purple" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="index.ping">Ping</p>
+              </div>
+              <p class="stat-value"><span id="ping">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+            </div>
+            <div class="stat">
+              <div class="stat-head">
+                <div class="stat-icon green" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                    <path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                    <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="index.jitter">Jitter</p>
+              </div>
+              <p class="stat-value"><span id="jitter">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card chart-card animate-fade-in" aria-label="Speed chart" data-i18n-attr="aria-label:index.aria.chart">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title" data-i18n="index.chart.title">Speed</h2>
+              <p class="card-note" data-i18n="index.chart.note">Megabits per second over the test</p>
+            </div>
+            <ul class="key">
+              <li><span class="swatch download"></span><span data-i18n="index.download">Download</span></li>
+              <li><span class="swatch upload"></span><span data-i18n="index.upload">Upload</span></li>
+            </ul>
+          </div>
+          <div class="chart">
+            <canvas id="speedChart" role="img" aria-label="Download and upload speed over the test" data-i18n-attr="aria-label:index.chart.aria"></canvas>
+            <div class="tooltip" id="chart-tooltip" hidden><span id="tooltip-label"></span><strong id="tooltip-value"></strong></div>
+          </div>
+        </section>
+      </div>
     </div>
 
-    <p id="privacy-warning" class="hidden">
-      by clicking the start button you agree to our privacy policy<br />
-      <a href="#" id="choose-privacy">or choose your privacy options</a>
-    </p>
-    <button class="disabled" id="start-button"></button>
-
-    <div class="gauge-layout">
-      <div class="ping hidden">
-        <span class="label">Ping</span>:&nbsp;
-        <span class="value" id="ping">00</span>ms
+    <dialog id="share" aria-labelledby="share-title">
+      <div class="dialog-head">
+        <h2 class="card-title" id="share-title" data-i18n="index.share.title">Share results</h2>
+        <button type="button" class="icon-btn close-dialog" aria-label="Close" data-i18n-attr="aria-label:btn.close;title:btn.close">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
       </div>
-
-      <div class="gauge download" id="download-gauge">
-        <div class="progress"></div>
-        <div class="speed"></div>
-        <h1><span id="download-speed">00</span> Mbps</h1>
-        <h2>Download</h2>
+      <img id="results" src="" alt="Test results in graphical form" data-i18n-attr="alt:index.share.alt" />
+      <div class="share-row">
+        <input type="text" id="share-url" readonly aria-label="Link to the results image" data-i18n-attr="aria-label:index.share.url" />
+        <button type="button" class="btn btn-primary" id="copy-link" data-i18n="index.share.copy">Copy link</button>
       </div>
+    </dialog>
 
-      <div class="gauge upload" id="upload-gauge">
-        <div class="progress"></div>
-        <div class="speed"></div>
-        <h1><span id="upload-speed">00</span> Mbps</h1>
-        <h2>Upload</h2>
+    <dialog id="privacy" aria-labelledby="privacy-title">
+      <div class="dialog-head">
+        <h2 class="card-title" id="privacy-title" data-i18n="privacy.title">Privacy Policy</h2>
+        <button type="button" class="icon-btn close-dialog" aria-label="Close" data-i18n-attr="aria-label:btn.close;title:btn.close">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
       </div>
+      <section class="policy">
+        <p data-i18n="privacy.intro">This HTML5 speed test server is configured with telemetry enabled.</p>
 
-      <div class="jitter hidden">
-        <span class="label">Jitter</span>:&nbsp;
-        <span class="value" id="jitter">00</span>ms
-      </div>
-    </div>
+        <h3 data-i18n="privacy.collect">What data we collect</h3>
+        <p data-i18n="privacy.collectIntro">At the end of the test, the following data is collected and stored:</p>
+        <ul>
+          <li data-i18n="privacy.item.id">Test ID</li>
+          <li data-i18n="privacy.item.time">Time of testing</li>
+          <li data-i18n="privacy.item.results">Test results (download and upload speed, ping and jitter)</li>
+          <li data-i18n="privacy.item.ip">IP address</li>
+          <li data-i18n="privacy.item.isp">ISP information</li>
+          <li data-i18n="privacy.item.location">Approximate location (inferred from IP address, not GPS)</li>
+          <li data-i18n="privacy.item.agent">User agent and browser locale</li>
+          <li data-i18n="privacy.item.log">Test log (contains no personal information)</li>
+        </ul>
 
-    <button class="small inverted hidden" id="share-results">
-      Share results
-    </button>
-  </main>
-  <footer>
-    <p class="source">
-      <a href="stability.html">stability test</a> | <a href="https://github.com/sprytnyk/speedtest-go">source code</a>
-    </p>
-  </footer>
+        <h3 data-i18n="privacy.use">How we use the data</h3>
+        <p data-i18n="privacy.useIntro">Data collected through this service is used to:</p>
+        <ul>
+          <li data-i18n="privacy.use.share">Allow sharing of test results (sharable image for forums, etc.)</li>
+          <li data-i18n="privacy.use.improve">To improve the service offered to you (for instance, to detect problems on our side)</li>
+        </ul>
+        <p data-i18n="privacy.thirdParties">No personal information is disclosed to third parties.</p>
 
-  <dialog id="share">
-    <div class="close-dialog">
-      <img src="images/close-button.svg" alt="Close" />
-    </div>
-    <img id="results" src="" alt="Test results in graphical form" />
-    <button id="copy-link">Copy link</button>
-  </dialog>
+        <h3 data-i18n="privacy.consent">Your consent</h3>
+        <p data-i18n="privacy.consentText">By starting the test, you consent to the terms of this privacy policy.</p>
 
-  <dialog id="privacy">
-    <div class="close-dialog">
-      <img src="images/close-button.svg" alt="Close" />
-    </div>
-    <section>
-      <h1>Privacy Policy</h1>
-      <p>
-        This HTML5 speed test server is configured with telemetry enabled.
-      </p>
-
-      <h2>What data we collect</h2>
-      <p>
-        At the end of the test, the following data is collected and stored:
-      </p>
-
-      <ul>
-        <li>Test ID</li>
-        <li>Time of testing</li>
-        <li>Test results (download and upload speed, ping and jitter)</li>
-        <li>IP address</li>
-        <li>ISP information</li>
-        <li>Approximate location (inferred from IP address, not GPS)</li>
-        <li>User agent and browser locale</li>
-        <li>Test log (contains no personal information)</li>
-      </ul>
-
-      <h2>How we use the data</h2>
-      <p>Data collected through this service is used to:</p>
-
-      <ul>
-        <li>
-          Allow sharing of test results (sharable image for forums, etc.)
-        </li>
-        <li>
-          To improve the service offered to you (for instance, to detect
-          problems on our side)
-        </li>
-      </ul>
-
-      <p>No personal information is disclosed to third parties.</p>
-
-      <h2>Your consent</h2>
-      <p>
-        By starting the test, you consent to the terms of this privacy policy.
-      </p>
-
-      <h2>Data removal</h2>
-      <p>
-        If you want to have your information deleted, you need to provide
-        either the ID of the test or your IP address. This is the only way to
-        identify your data, without this information we won't be able to
-        comply with your request.
-      </p>
-      <p>
-        Contact this email address for all deletion requests:
-        <a href="mailto:PUT@YOUR_EMAIL.HERE">TO BE FILLED BY DEVELOPER</a>.
-      </p>
-    </section>
-    <button id="close-privacy">Close</button>
-  </dialog>
-</body>
-
+        <h3 data-i18n="privacy.removal">Data removal</h3>
+        <p data-i18n="privacy.removalText">
+          If you want to have your information deleted, you need to provide either the ID of the test or your IP address.
+          This is the only way to identify your data, without this information we won't be able to comply with your request.
+        </p>
+        <p>
+          <span data-i18n="privacy.contact">Contact this email address for all deletion requests:</span>
+          <a href="mailto:PUT@YOUR_EMAIL.HERE">TO BE FILLED BY DEVELOPER</a>.
+        </p>
+      </section>
+    </dialog>
+  </body>
 </html>
