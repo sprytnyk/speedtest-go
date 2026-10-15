@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="icon" href="{{ .BaseURL }}images/favicon.svg" />
+    <title data-i18n="stats.title">LibreSpeed - Statistics</title>
+    <script type="text/javascript" src="{{ .BaseURL }}javascript/i18n.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-start: #0f172a;
+        --bg-mid: #1e293b;
+        --surface: #1e293b;
+        --raised: rgba(51, 65, 85, 0.5);
+        --raised-hover: #334155;
+        --inset: #0f172a;
+        --border: #334155;
+        --line: rgba(51, 65, 85, 0.6);
+        --text: #e2e8f0;
+        --text-strong: #ffffff;
+        --text-soft: #cbd5e1;
+        --text-muted: #94a3b8;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --link: #60a5fa;
+        --link-hover: #93c5fd;
+        --ok: #34d399;
+        --bad: #fb7185;
+        --download: #3b82f6;
+        --upload: #f59e0b;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+          "Noto Color Emoji";
+        min-height: 100vh;
+        background: linear-gradient(to bottom right, var(--bg-start), var(--bg-mid), var(--bg-start)) fixed;
+        color: var(--text);
+        line-height: 1.5;
+      }
+
+      a {
+        color: var(--link);
+        text-decoration: none;
+        transition: color 0.15s ease;
+      }
+
+      a:hover {
+        color: var(--link-hover);
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--link);
+        outline-offset: 2px;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      .page {
+        max-width: 80rem;
+        min-height: 100vh;
+        min-height: 100dvh;
+        margin: 0 auto;
+        padding: 1rem 1.5rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-width: 0;
+      }
+
+      /* Top bar, as on the other pages */
+
+      .topbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem 1rem;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        min-width: 0;
+      }
+
+      .icon-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 3rem;
+        height: 3rem;
+        flex-shrink: 0;
+        background-color: var(--accent);
+        border-radius: 0.875rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      }
+
+      .icon-box svg {
+        width: 1.5rem;
+        height: 1.5rem;
+        color: #fff;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-strong);
+        line-height: 1.2;
+      }
+
+      .subtitle {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+      }
+
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .back svg {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .lang-switch {
+        display: inline-flex;
+        gap: 0.25rem;
+        padding: 0.25rem;
+        background-color: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+      }
+
+      .lang-switch button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 1.75rem;
+        border: 0;
+        border-radius: 0.5rem;
+        background: none;
+        cursor: pointer;
+        opacity: 0.5;
+        transition:
+          background-color 0.15s ease,
+          opacity 0.15s ease;
+      }
+
+      .lang-switch button:hover {
+        opacity: 0.85;
+      }
+
+      .lang-switch button[aria-pressed="true"] {
+        background-color: var(--raised-hover);
+        opacity: 1;
+      }
+
+      .lang-switch svg {
+        display: block;
+        width: 1.3125rem;
+        height: 0.875rem;
+        border-radius: 2px;
+      }
+
+      /* Cards and controls */
+
+      .card {
+        background-color: var(--surface);
+        border-radius: 1.25rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        padding: 1.25rem 1.5rem;
+        border: 1px solid var(--border);
+        min-width: 0;
+      }
+
+      .card.narrow {
+        width: 100%;
+        max-width: 28rem;
+        margin: 3rem auto 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1.25rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .card-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-strong);
+        line-height: 1.3;
+      }
+
+      .card-note {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+      }
+
+      label {
+        display: block;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-bottom: 0.375rem;
+      }
+
+      input {
+        width: 100%;
+        min-width: 0;
+        font: inherit;
+        color: var(--text-strong);
+        background-color: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 0.625rem 0.875rem;
+        transition: border-color 0.15s ease;
+      }
+
+      input:hover {
+        border-color: #475569;
+      }
+
+      input::placeholder {
+        color: #64748b;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        font: inherit;
+        font-weight: 600;
+        border-radius: 0.75rem;
+        border: 1px solid transparent;
+        padding: 0.625rem 1.25rem;
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+          background-color 0.15s ease,
+          border-color 0.15s ease;
+      }
+
+      .btn svg {
+        width: 1.125rem;
+        height: 1.125rem;
+      }
+
+      .btn-primary {
+        background-color: var(--accent);
+        color: #fff;
+      }
+
+      .btn-primary:hover {
+        background-color: var(--accent-hover);
+      }
+
+      .btn-secondary {
+        background-color: var(--raised);
+        border-color: var(--border);
+        color: var(--text);
+      }
+
+      .btn-secondary:hover {
+        background-color: var(--raised-hover);
+        color: var(--text);
+      }
+
+      .btn-small {
+        font-size: 0.875rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.625rem;
+      }
+
+      .btn-small svg {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .btn-block {
+        width: 100%;
+      }
+
+      .login .btn-block {
+        margin-top: 1rem;
+      }
+
+      /* Status boxes */
+
+      .verdict {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid;
+      }
+
+      .verdict svg {
+        width: 1.375rem;
+        height: 1.375rem;
+        flex-shrink: 0;
+        margin-top: 0.0625rem;
+      }
+
+      .verdict-title {
+        font-weight: 600;
+      }
+
+      .verdict-text {
+        font-size: 0.8125rem;
+        color: var(--text-soft);
+        overflow-wrap: anywhere;
+      }
+
+      .verdict code {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--text-strong);
+      }
+
+      .verdict.idle {
+        background-color: var(--raised);
+        border-color: var(--border);
+      }
+
+      .verdict.idle svg {
+        color: var(--text-muted);
+      }
+
+      .verdict.idle .verdict-title {
+        color: var(--text-strong);
+      }
+
+      .verdict.bad {
+        background-color: rgba(244, 63, 94, 0.1);
+        border-color: rgba(244, 63, 94, 0.4);
+      }
+
+      .verdict.bad svg,
+      .verdict.bad .verdict-title {
+        color: var(--bad);
+      }
+
+      /* Search */
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 0.75rem 1.5rem;
+      }
+
+      .search {
+        flex: 1 1 24rem;
+        max-width: 40rem;
+      }
+
+      .search-row {
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      .search input {
+        font-family: var(--mono);
+        font-size: 0.875rem;
+      }
+
+      .search input::placeholder {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .toolbar .back {
+        padding-bottom: 0.625rem;
+      }
+
+      /* List of tests */
+
+      .table-wrap {
+        margin: 0 -0.5rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      th {
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        padding: 0.5rem;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+
+      th .unit {
+        color: #64748b;
+        margin-left: 0.25rem;
+      }
+
+      .dot {
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 9999px;
+        margin-right: 0.375rem;
+        vertical-align: 0.0625rem;
+      }
+
+      .dot.download {
+        background-color: var(--download);
+      }
+
+      .dot.upload {
+        background-color: var(--upload);
+      }
+
+      td {
+        padding: 0.625rem 0.5rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: middle;
+      }
+
+      tbody tr {
+        transition: background-color 0.15s ease;
+      }
+
+      tbody tr:hover {
+        background-color: var(--raised);
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      th.num,
+      td.num {
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      td.num {
+        color: var(--text-strong);
+        font-weight: 500;
+      }
+
+      td.time {
+        white-space: nowrap;
+        color: var(--text-soft);
+      }
+
+      td.id a {
+        font-family: var(--mono);
+        font-size: 0.8125rem;
+      }
+
+      td.isp {
+        max-width: 18rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      td.ip {
+        color: var(--text-muted);
+        overflow-wrap: anywhere;
+      }
+
+      .empty {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+      }
+
+      /* One test */
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.75rem;
+      }
+
+      .stat {
+        background-color: var(--raised);
+        border-radius: 0.75rem;
+        padding: 0.875rem 1rem;
+        min-width: 0;
+        transition: background-color 0.15s ease;
+      }
+
+      .stat:hover {
+        background-color: var(--raised-hover);
+      }
+
+      .stat-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .stat-icon {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .stat-icon svg {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .stat-icon.blue {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+      }
+
+      .stat-icon.amber {
+        background-color: rgba(245, 158, 11, 0.2);
+        color: #fbbf24;
+      }
+
+      .stat-icon.purple {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #a78bfa;
+      }
+
+      .stat-icon.green {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+      }
+
+      .stat-label {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .stat-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-strong);
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .stat-unit {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-left: 0.25rem;
+      }
+
+      .test-id {
+        font-family: var(--mono);
+        font-size: 0.8125rem;
+        color: var(--text-soft);
+        overflow-wrap: anywhere;
+      }
+
+      .detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 1rem 1.25rem;
+        align-items: start;
+      }
+
+      .detail-grid > div {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-width: 0;
+      }
+
+      .fields > div {
+        display: grid;
+        grid-template-columns: 9.5rem minmax(0, 1fr);
+        gap: 0.25rem 1rem;
+        padding: 0.625rem 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .fields > div:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .fields > div:last-child {
+        padding-bottom: 0;
+      }
+
+      .fields dt {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        padding-top: 0.0625rem;
+      }
+
+      .fields dd {
+        color: var(--text-strong);
+        overflow-wrap: anywhere;
+      }
+
+      .fields dd.soft {
+        color: var(--text-soft);
+        font-size: 0.875rem;
+      }
+
+      .fields dd.mono {
+        font-family: var(--mono);
+        font-size: 0.8125rem;
+      }
+
+      .result-image {
+        display: block;
+        border-radius: 0.75rem;
+        overflow: hidden;
+      }
+
+      .result-image img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .timeline {
+        list-style: none;
+        font-size: 0.875rem;
+      }
+
+      .timeline li {
+        display: grid;
+        grid-template-columns: 4.5rem minmax(0, 1fr);
+        gap: 0.75rem;
+        padding: 0.5rem 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .timeline li:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .timeline .at {
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+
+      .timeline .event {
+        color: var(--text-soft);
+        overflow-wrap: anywhere;
+      }
+
+      details {
+        margin-top: 0.875rem;
+      }
+
+      summary {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--link);
+        cursor: pointer;
+        width: max-content;
+      }
+
+      summary:hover {
+        color: var(--link-hover);
+      }
+
+      pre {
+        margin-top: 0.625rem;
+        padding: 0.75rem 0.875rem;
+        background-color: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--text-soft);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        max-height: 24rem;
+        overflow-y: auto;
+        scrollbar-color: #475569 transparent;
+      }
+
+      .footer {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+      }
+
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .animate-fade-in {
+        animation: fade-in 0.5s ease-out;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .animate-fade-in {
+          animation: none;
+        }
+      }
+
+      @media screen and (max-width: 1100px) {
+        .detail-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .result-image {
+          max-width: 37.5rem;
+        }
+      }
+
+      @media screen and (max-width: 960px) {
+        th.ip,
+        td.ip {
+          display: none;
+        }
+      }
+
+      /* the table becomes a card per test */
+      @media screen and (max-width: 760px) {
+        .page {
+          padding: 1rem 1rem 1.5rem;
+        }
+        .footer {
+          text-align: center;
+        }
+        .table-wrap {
+          margin: 0;
+        }
+        thead {
+          display: none;
+        }
+        table,
+        tbody {
+          display: block;
+        }
+        tbody tr {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 0.5rem 0.75rem;
+          padding: 0.75rem 0.875rem;
+          margin-top: 0.625rem;
+          background-color: var(--raised);
+          border-radius: 0.75rem;
+        }
+        tbody tr:first-child {
+          margin-top: 0;
+        }
+        tbody tr:hover {
+          background-color: var(--raised-hover);
+        }
+        td {
+          display: block;
+          padding: 0;
+          border: 0;
+          min-width: 0;
+        }
+        td.time {
+          grid-column: 1 / -1;
+          color: var(--text-strong);
+          font-weight: 500;
+        }
+        td.time a {
+          color: inherit;
+        }
+        td.id {
+          grid-column: 1 / -1;
+          margin-top: -0.375rem;
+        }
+        td.num {
+          text-align: left;
+        }
+        td.num::before {
+          content: attr(data-label);
+          display: block;
+          font-size: 0.6875rem;
+          font-weight: 500;
+          color: var(--text-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        td.isp,
+        td.ip {
+          grid-column: 1 / -1;
+          max-width: none;
+          font-size: 0.8125rem;
+        }
+        td.ip {
+          display: block;
+          margin-top: -0.375rem;
+        }
+        .stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media screen and (max-width: 640px) {
+        .card {
+          padding: 1rem 1.125rem;
+        }
+        .card.narrow {
+          margin-top: 1rem;
+        }
+        .stat {
+          padding: 0.75rem;
+        }
+        .stat-value {
+          font-size: 1.5rem;
+        }
+        .fields > div {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 0.125rem;
+        }
+        .toolbar .back {
+          padding-bottom: 0;
+        }
+      }
+
+      @media screen and (max-width: 440px) {
+        tbody tr {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .search-row {
+          flex-direction: column;
+        }
+      }
+
+      @media screen and (max-width: 400px) {
+        .page {
+          padding-left: 0.75rem;
+          padding-right: 0.75rem;
+        }
+        .topbar-actions {
+          order: -1;
+          flex-basis: 100%;
+          justify-content: space-between;
+        }
+        .icon-box {
+          width: 2.5rem;
+          height: 2.5rem;
+          border-radius: 0.75rem;
+        }
+        .icon-box svg {
+          width: 1.25rem;
+          height: 1.25rem;
+        }
+        h1 {
+          font-size: 1.25rem;
+        }
+        .card {
+          padding: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <div class="icon-box" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3v16a2 2 0 0 0 2 2h16"></path>
+              <path d="M18 17V9"></path>
+              <path d="M13 17V5"></path>
+              <path d="M8 17v-3"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 data-i18n="stats.heading">Statistics</h1>
+            <p class="subtitle" data-i18n="stats.subtitle">Results of the speed tests run on this server.</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <a class="back" href="{{ .BaseURL }}">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m12 19-7-7 7-7"></path>
+              <path d="M19 12H5"></path>
+            </svg>
+            LibreSpeed
+          </a>
+          {{- if .LoggedIn }}
+          <form action="{{ .BaseURL }}stats" method="get">
+            <input type="hidden" name="op" value="logout" />
+            <button type="submit" class="btn btn-secondary btn-small">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" x2="9" y1="12" y2="12"></line>
+              </svg>
+              <span data-i18n="stats.signOut">Sign out</span>
+            </button>
+          </form>
+          {{- end }}
+          <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:lang.label" hidden>
+            <button type="button" data-lang="en" lang="en" aria-pressed="true" aria-label="English" title="English">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <clipPath id="flag-gb-clip"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"></path></clipPath>
+                <path d="M0,0 v30 h60 v-30 z" fill="#012169"></path>
+                <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"></path>
+                <path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#flag-gb-clip)" stroke="#C8102E" stroke-width="4"></path>
+                <path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"></path>
+                <path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"></path>
+              </svg>
+            </button>
+            <button type="button" data-lang="uk" lang="uk" aria-pressed="false" aria-label="Українська" title="Українська">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" aria-hidden="true">
+                <rect width="3" height="1" fill="#0057B7"></rect>
+                <rect y="1" width="3" height="1" fill="#FFD700"></rect>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        {{- if .Disabled }}
+        <section class="card narrow animate-fade-in">
+          <div class="verdict idle" role="status">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 16v-4"></path>
+              <path d="M12 8h.01"></path>
+            </svg>
+            <div>
+              <p class="verdict-title" data-i18n="stats.disabled">Statistics are disabled</p>
+              <p class="verdict-text"><span data-i18n="stats.disabledText">Results are not stored, because the database type is set to</span> <code>none</code>.</p>
+            </div>
+          </div>
+        </section>
+        {{- else if .NoPassword }}
+        <section class="card narrow animate-fade-in">
+          <div class="verdict idle" role="status">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <div>
+              <p class="verdict-title" data-i18n="stats.locked">Statistics are locked</p>
+              <p class="verdict-text"><span data-i18n="stats.lockedText">To enable access, set a password in</span> <code>statistics_password</code>.</p>
+            </div>
+          </div>
+        </section>
+        {{- else if not .LoggedIn }}
+        <section class="card narrow animate-fade-in" aria-labelledby="login-title">
+          <div>
+            <h2 class="card-title" id="login-title" data-i18n="stats.signIn">Sign in</h2>
+            <p class="card-note" data-i18n="stats.signInNote">Enter the statistics password to see the results.</p>
+          </div>
+          {{- if .LoginFailed }}
+          <div class="verdict bad" role="alert">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="m15 9-6 6"></path>
+              <path d="m9 9 6 6"></path>
+            </svg>
+            <div>
+              <p class="verdict-title" data-i18n="stats.wrongPassword">Wrong password</p>
+              <p class="verdict-text" data-i18n="stats.wrongPasswordText">Check the password and try again.</p>
+            </div>
+          </div>
+          {{- end }}
+          <form class="login" action="{{ .BaseURL }}stats?op=login" method="post">
+            <label for="password" data-i18n="stats.password">Password</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required autofocus />
+            <button type="submit" class="btn btn-primary btn-block" data-i18n="stats.signIn">Sign in</button>
+          </form>
+        </section>
+        {{- else }}
+        <section class="card toolbar animate-fade-in">
+          <form class="search" action="{{ .BaseURL }}stats" method="get" role="search">
+            <label for="id" data-i18n="stats.search">Find a test by its ID</label>
+            <div class="search-row">
+              <input type="text" id="id" name="id" value="{{ .Query }}" placeholder="Test ID" data-i18n-attr="placeholder:stats.idPlaceholder" autocomplete="off" autocapitalize="off" spellcheck="false" required />
+              <button type="submit" class="btn btn-primary" data-i18n="stats.find">Find</button>
+            </div>
+          </form>
+          {{- if .Query }}
+          <a class="back" href="{{ .BaseURL }}stats">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m12 19-7-7 7-7"></path>
+              <path d="M19 12H5"></path>
+            </svg>
+            <span data-i18n="stats.allTests">All tests</span>
+          </a>
+          {{- end }}
+        </section>
+
+        {{- if .NotFound }}
+        <div class="verdict bad" role="alert">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="m15 9-6 6"></path>
+            <path d="m9 9 6 6"></path>
+          </svg>
+          <div>
+            <p class="verdict-title" data-i18n="stats.notFound">Test not found</p>
+            <p class="verdict-text"><span data-i18n="stats.notFoundText">No test has this ID:</span> <code>{{ .Query }}</code></p>
+          </div>
+        </div>
+        {{- else if .LoadFailed }}
+        <div class="verdict bad" role="alert">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="m15 9-6 6"></path>
+            <path d="m9 9 6 6"></path>
+          </svg>
+          <div>
+            <p class="verdict-title" data-i18n="stats.loadFailed">Could not load the tests</p>
+            <p class="verdict-text" data-i18n="stats.loadFailedText">The database returned an error. The details are in the server log.</p>
+          </div>
+        </div>
+        {{- else if .Single }}
+        {{- range .Data }}
+        <section class="card animate-fade-in" aria-labelledby="result-title">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title" id="result-title" data-i18n="stats.result">Test result</h2>
+              <p class="card-note"><time datetime="{{ .Time }}" title="{{ .TimeText }}">{{ .TimeText }}</time></p>
+            </div>
+            <p class="test-id">{{ .UUID }}</p>
+          </div>
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-head">
+                <div class="stat-icon blue" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14"></path>
+                    <path d="m19 12-7 7-7-7"></path>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="index.download">Download</p>
+              </div>
+              <p class="stat-value"><span data-num="{{ .DownloadText }}">{{ .DownloadText }}</span><span class="stat-unit" data-i18n="unit.mbps">Mbps</span></p>
+            </div>
+            <div class="stat">
+              <div class="stat-head">
+                <div class="stat-icon amber" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m5 12 7-7 7 7"></path>
+                    <path d="M12 19V5"></path>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="index.upload">Upload</p>
+              </div>
+              <p class="stat-value"><span data-num="{{ .UploadText }}">{{ .UploadText }}</span><span class="stat-unit" data-i18n="unit.mbps">Mbps</span></p>
+            </div>
+            <div class="stat">
+              <div class="stat-head">
+                <div class="stat-icon purple" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="index.ping">Ping</p>
+              </div>
+              <p class="stat-value"><span data-num="{{ .PingText }}">{{ .PingText }}</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+            </div>
+            <div class="stat">
+              <div class="stat-head">
+                <div class="stat-icon green" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                    <path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                    <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="index.jitter">Jitter</p>
+              </div>
+              <p class="stat-value"><span data-num="{{ .JitterText }}">{{ .JitterText }}</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+            </div>
+          </div>
+        </section>
+
+        <div class="detail-grid">
+          <div>
+            <section class="card animate-fade-in" aria-labelledby="client-title">
+              <div class="card-head">
+                <h2 class="card-title" id="client-title" data-i18n="stats.client">Connection</h2>
+              </div>
+              <dl class="fields">
+                <div>
+                  <dt data-i18n="stats.ip">IP address</dt>
+                  <dd>{{ .IPAddress }}</dd>
+                </div>
+                {{- if .ISP }}
+                <div>
+                  <dt data-i18n="stats.isp">Provider</dt>
+                  <dd>{{ .ISP }}</dd>
+                </div>
+                {{- end }}
+                {{- if .Location }}
+                <div>
+                  <dt data-i18n="stats.location">Location</dt>
+                  <dd>{{ .Location }}</dd>
+                </div>
+                {{- end }}
+                {{- if .Lookup }}
+                <div>
+                  <dt data-i18n="stats.lookup">ISP lookup</dt>
+                  <dd class="soft">{{ .Lookup }}</dd>
+                </div>
+                {{- else if .ISPInfoText }}
+                <div>
+                  <dt data-i18n="stats.lookup">ISP lookup</dt>
+                  <dd class="soft">{{ .ISPInfoText }}</dd>
+                </div>
+                {{- end }}
+                <div>
+                  <dt data-i18n="stats.agent">Browser</dt>
+                  <dd class="soft">{{ .UserAgent }}</dd>
+                </div>
+                {{- if .Languages }}
+                <div>
+                  <dt data-i18n="stats.languages">Languages</dt>
+                  <dd class="soft">{{ .Languages }}</dd>
+                </div>
+                {{- end }}
+                {{- if .PublicID }}
+                <div>
+                  <dt data-i18n="stats.publicId">Shared ID</dt>
+                  <dd class="mono">{{ .PublicID }}</dd>
+                </div>
+                {{- end }}
+              </dl>
+            </section>
+
+            {{- if or .Extra .ExtraText }}
+            <section class="card animate-fade-in" aria-labelledby="extra-title">
+              <div class="card-head">
+                <h2 class="card-title" id="extra-title" data-i18n="stats.extra">Extra data</h2>
+              </div>
+              <dl class="fields">
+                {{- range .Extra }}
+                <div>
+                  <dt{{ if .Key }} data-i18n="{{ .Key }}"{{ end }}>{{ .Label }}</dt>
+                  <dd>{{ .Value }}</dd>
+                </div>
+                {{- end }}
+                {{- if .ExtraText }}
+                <div>
+                  <dt data-i18n="stats.extraText">Text</dt>
+                  <dd class="soft">{{ .ExtraText }}</dd>
+                </div>
+                {{- end }}
+              </dl>
+            </section>
+            {{- end }}
+          </div>
+
+          <div>
+            <section class="card animate-fade-in" aria-labelledby="image-title">
+              <div class="card-head">
+                <h2 class="card-title" id="image-title" data-i18n="stats.image">Result image</h2>
+                <a class="back" href="{{ $.BaseURL }}results/?id={{ .UUID }}" target="_blank" rel="noopener" data-image-lang="href">
+                  <span data-i18n="stats.openImage">Open</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M15 3h6v6"></path>
+                    <path d="M10 14 21 3"></path>
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  </svg>
+                </a>
+              </div>
+              <a class="result-image" href="{{ $.BaseURL }}results/?id={{ .UUID }}" target="_blank" rel="noopener" data-image-lang="href">
+                <img src="{{ $.BaseURL }}results/?id={{ .UUID }}" data-image-lang="src" width="600" height="320" alt="Result image of this test" data-i18n-attr="alt:stats.imageAlt" />
+              </a>
+            </section>
+
+            <section class="card animate-fade-in" aria-labelledby="log-title">
+              <div class="card-head">
+                <h2 class="card-title" id="log-title" data-i18n="stats.log">Test log</h2>
+                <p class="card-note" data-i18n="stats.logNote">Seconds from the start of the test</p>
+              </div>
+              {{- if .LogLines }}
+              <ol class="timeline">
+                {{- range .LogLines }}
+                <li><span class="at">{{ .At }}</span><span class="event">{{ .Text }}</span></li>
+                {{- end }}
+              </ol>
+              <details>
+                <summary data-i18n="stats.rawLog">Show the raw log</summary>
+                <pre>{{ .Log }}</pre>
+              </details>
+              {{- else }}
+              <p class="empty" data-i18n="stats.noLog">No log was recorded for this test.</p>
+              {{- end }}
+            </section>
+          </div>
+        </div>
+        {{- end }}
+        {{- else }}
+        <section class="card animate-fade-in" aria-labelledby="list-title">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title" id="list-title" data-i18n="stats.latest">Latest tests</h2>
+              <p class="card-note" data-i18n="stats.latestNote">Up to 100, newest first. Open a test to see all its details.</p>
+            </div>
+          </div>
+          {{- if .Data }}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th data-i18n="stats.time">Time</th>
+                  <th data-i18n="stats.testId">Test ID</th>
+                  <th class="num"><span class="dot download" aria-hidden="true"></span><span data-i18n="index.download">Download</span><span class="unit" data-i18n="unit.mbps">Mbps</span></th>
+                  <th class="num"><span class="dot upload" aria-hidden="true"></span><span data-i18n="index.upload">Upload</span><span class="unit" data-i18n="unit.mbps">Mbps</span></th>
+                  <th class="num"><span data-i18n="index.ping">Ping</span><span class="unit" data-i18n="unit.ms">ms</span></th>
+                  <th class="num"><span data-i18n="index.jitter">Jitter</span><span class="unit" data-i18n="unit.ms">ms</span></th>
+                  <th data-i18n="stats.isp">Provider</th>
+                  <th class="ip" data-i18n="stats.ip">IP address</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{- range .Data }}
+                <tr>
+                  <td class="time"><a href="{{ $.BaseURL }}stats?id={{ .UUID }}"><time datetime="{{ .Time }}" title="{{ .TimeText }}">{{ .TimeText }}</time></a></td>
+                  <td class="id"><a href="{{ $.BaseURL }}stats?id={{ .UUID }}">{{ .UUID }}</a></td>
+                  <td class="num" data-label="Download, Mbps" data-i18n-attr="data-label:stats.col.download"><span data-num="{{ .DownloadText }}">{{ .DownloadText }}</span></td>
+                  <td class="num" data-label="Upload, Mbps" data-i18n-attr="data-label:stats.col.upload"><span data-num="{{ .UploadText }}">{{ .UploadText }}</span></td>
+                  <td class="num" data-label="Ping, ms" data-i18n-attr="data-label:stats.col.ping"><span data-num="{{ .PingText }}">{{ .PingText }}</span></td>
+                  <td class="num" data-label="Jitter, ms" data-i18n-attr="data-label:stats.col.jitter"><span data-num="{{ .JitterText }}">{{ .JitterText }}</span></td>
+                  <td class="isp" title="{{ .ISP }}">{{ if .ISP }}{{ .ISP }}{{ else }}--{{ end }}</td>
+                  <td class="ip">{{ .IPAddress }}</td>
+                </tr>
+                {{- end }}
+              </tbody>
+            </table>
+          </div>
+          {{- else }}
+          <p class="empty" data-i18n="stats.empty">No tests have been recorded yet.</p>
+          {{- end }}
+        </section>
+        {{- end }}
+        {{- end }}
+      </main>
+
+      <footer class="footer">
+        <p><a href="{{ .BaseURL }}">LibreSpeed</a> · <a href="{{ .BaseURL }}stability.html" data-i18n="nav.stability">Stability test</a> · <a href="https://github.com/sprytnyk/speedtest-go" data-i18n="footer.source">Source code</a></p>
+      </footer>
+    </div>
+
+    <script type="text/javascript">
+      // Numbers and times are rendered in English by the server; show them in the page's language.
+      // Without i18n.js (a custom assets_path) the page stays in English and the switch stays hidden.
+      (function () {
+        var I18N = window.I18N;
+        if (!I18N) return;
+        document.querySelector(".lang-switch").hidden = false;
+
+        function localize() {
+          var lang = I18N.lang();
+          var nums = document.querySelectorAll("[data-num]");
+          for (var i = 0; i < nums.length; i++) {
+            var raw = nums[i].getAttribute("data-num");
+            if (/^-?\d+(\.\d+)?$/.test(raw)) nums[i].textContent = I18N.num(raw, (raw.split(".")[1] || "").length);
+          }
+          var times = document.querySelectorAll("time[datetime]");
+          for (var j = 0; j < times.length; j++) {
+            var date = new Date(times[j].getAttribute("datetime"));
+            if (isNaN(date)) continue;
+            times[j].textContent = date.toLocaleString(lang, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hourCycle: "h23",
+            });
+          }
+
+          // the result image has its labels in the page's language too
+          var images = document.querySelectorAll("[data-image-lang]");
+          for (var k = 0; k < images.length; k++) {
+            var attr = images[k].getAttribute("data-image-lang");
+            var url = new URL(images[k].getAttribute(attr), location.href);
+            if (lang === "en") url.searchParams.delete("lang");
+            else url.searchParams.set("lang", lang);
+            images[k].setAttribute(attr, url.pathname + url.search);
+          }
+        }
+
+        localize();
+        I18N.onChange(localize);
+      })();
+    </script>
+  </body>
+</html>

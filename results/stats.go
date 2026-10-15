@@ -1,11 +1,21 @@
 package results
 
 import (
+	"bytes"
 	"crypto/subtle"
+	_ "embed"
+	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
 
-	"github.com/go-chi/render"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/gorilla/securecookie"
@@ -15,15 +25,58 @@ import (
 	"github.com/librespeed/speedtest-go/database/schema"
 )
 
+// StatsData is what the stats page template renders.
 type StatsData struct {
-	NoPassword bool
-	LoggedIn   bool
-	Data       []schema.TelemetryData
+	BaseURL     string // ends with a slash, for links that work from /stats and /backend/stats alike
+	Disabled    bool   // database_type is none
+	NoPassword  bool   // statistics_password is not set
+	LoggedIn    bool
+	LoginFailed bool
+	Query       string // the test ID searched for
+	Single      bool   // a single test is shown in full rather than the list
+	NotFound    bool
+	LoadFailed  bool
+	Data        []StatsEntry
+}
+
+// StatsField is one value of stored JSON, under a readable label. Key, when
+// set, is the page's translation key for the label.
+type StatsField struct {
+	Key, Label, Value string
+}
+
+// LogLine is one event of the test log, timed from the start of the test.
+type LogLine struct {
+	At, Text string
+}
+
+// StatsEntry is a stored test with its fields prepared for display.
+type StatsEntry struct {
+	schema.TelemetryData
+	Time         string // RFC 3339, reformatted in the viewer's language by the page
+	TimeText     string
+	PublicID     string // the ID users see when ID obfuscation is on
+	ISP          string
+	Location     string
+	Lookup       string // the ISP lookup summary, "IP - ISP, Country"
+	ISPInfoText  string // the stored ISP info when it is not the usual JSON
+	Languages    string
+	Extra        []StatsField
+	ExtraText    string // extra data that is not a JSON object
+	LogLines     []LogLine
+	DownloadText string
+	UploadText   string
+	PingText     string
+	JitterText   string
 }
 
 var (
 	key   = []byte(securecookie.GenerateRandomKey(32))
 	store = sessions.NewCookieStore(key)
+
+	//go:embed stats.html
+	statsHTML     string
+	statsTemplate = template.Must(template.New("stats").Parse(statsHTML))
 )
 
 // initStatsSession configures the stats session cookie. It must run after the
@@ -39,164 +92,340 @@ func initStatsSession(c *config.Config) {
 
 func Stats(w http.ResponseWriter, r *http.Request) {
 	conf := config.LoadedConfig()
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	t, err := template.New("template").Parse(htmlTemplate)
-	if err != nil {
-		log.Errorf("Failed to parse template: %s", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	data := StatsData{BaseURL: conf.BaseURL + "/"}
+	status := http.StatusOK
 
-	if conf.DatabaseType == "none" {
-		render.PlainText(w, r, "Statistics are disabled")
-		return
-	}
-
-	var data StatsData
-
-	if conf.StatsPassword == "PASSWORD" {
+	switch {
+	case conf.DatabaseType == "none":
+		data.Disabled = true
+	case conf.StatsPassword == "PASSWORD" || conf.StatsPassword == "":
 		data.NoPassword = true
-	}
-
-	if !data.NoPassword {
-		op := r.FormValue("op")
-		session, _ := store.Get(r, "logged")
-		auth, ok := session.Values["authenticated"].(bool)
-
-		if auth && ok {
-			if op == "logout" {
-				session.Values["authenticated"] = false
-				session.Options.MaxAge = -1
-				session.Save(r, w)
-				http.Redirect(w, r, conf.BaseURL+"/stats", http.StatusTemporaryRedirect)
-				return
-			} else {
-				data.LoggedIn = true
-
-				id := r.FormValue("id")
-				switch id {
-				case "L100":
-					stats, err := database.DB.FetchLast100()
-					if err != nil {
-						log.Errorf("Error fetching data from database: %s", err)
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-					data.Data = stats
-				case "":
-				default:
-					stat, err := database.DB.FetchByUUID(ResolveID(id))
-					if err != nil {
-						log.Errorf("Error fetching data from database: %s", err)
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-					data.Data = append(data.Data, *stat)
-				}
-			}
-		} else {
-			if op == "login" {
-				session, _ := store.Get(r, "logged")
-				password := r.FormValue("password")
-				if subtle.ConstantTimeCompare([]byte(password), []byte(conf.StatsPassword)) == 1 {
-					session.Values["authenticated"] = true
-					session.Save(r, w)
-					http.Redirect(w, r, conf.BaseURL+"/stats", http.StatusTemporaryRedirect)
-					return
-				} else {
-					w.WriteHeader(http.StatusForbidden)
-				}
-			}
+	default:
+		var done bool
+		if status, done = statsSession(w, r, conf, &data); done {
+			return
 		}
 	}
 
-	if err := t.Execute(w, data); err != nil {
+	var page bytes.Buffer
+	if err := statsTemplate.Execute(&page, data); err != nil {
 		log.Errorf("Error executing template: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_, _ = page.WriteTo(w)
+}
+
+// statsSession handles login and logout and loads the tests to show. It
+// returns the response status, or done when it has already answered with a
+// redirect.
+func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, data *StatsData) (status int, done bool) {
+	session, _ := store.Get(r, "logged")
+	auth, _ := session.Values["authenticated"].(bool)
+	op := r.FormValue("op")
+	statsURL := conf.BaseURL + "/stats"
+
+	if !auth {
+		if op != "login" {
+			return http.StatusOK, false
+		}
+		// only from a POST body, so the password never ends up in a URL or a log
+		password := r.PostFormValue("password")
+		if r.Method == http.MethodPost && subtle.ConstantTimeCompare([]byte(password), []byte(conf.StatsPassword)) == 1 {
+			session.Values["authenticated"] = true
+			if err := session.Save(r, w); err != nil {
+				log.Errorf("Error saving stats session: %s", err)
+			}
+			// 303 so the browser follows with a GET instead of posting the password again
+			http.Redirect(w, r, statsURL, http.StatusSeeOther)
+			return 0, true
+		}
+		data.LoginFailed = true
+		return http.StatusForbidden, false
+	}
+
+	if op == "logout" {
+		session.Values["authenticated"] = false
+		session.Options.MaxAge = -1
+		if err := session.Save(r, w); err != nil {
+			log.Errorf("Error saving stats session: %s", err)
+		}
+		http.Redirect(w, r, statsURL, http.StatusSeeOther)
+		return 0, true
+	}
+
+	data.LoggedIn = true
+	id := strings.TrimSpace(r.FormValue("id"))
+	if id == "" || id == "L100" {
+		stats, err := database.DB.FetchLast100()
+		if err != nil {
+			log.Errorf("Error fetching data from database: %s", err)
+			data.LoadFailed = true
+			return http.StatusInternalServerError, false
+		}
+		for _, stat := range stats {
+			data.Data = append(data.Data, newStatsEntry(stat, conf))
+		}
+		return http.StatusOK, false
+	}
+
+	data.Query = id
+	stat, err := database.DB.FetchByUUID(ResolveID(id))
+	if err != nil {
+		log.Errorf("Error fetching data from database: %s", err)
+		data.NotFound = true
+		return http.StatusNotFound, false
+	}
+	data.Single = true
+	data.Data = append(data.Data, newStatsEntry(*stat, conf))
+	return http.StatusOK, false
+}
+
+func newStatsEntry(t schema.TelemetryData, conf *config.Config) StatsEntry {
+	e := StatsEntry{
+		TelemetryData: t,
+		Time:          t.Timestamp.Format(time.RFC3339),
+		TimeText:      t.Timestamp.Format("2006-01-02 15:04:05 MST"),
+		Languages:     readableLanguages(t.Language),
+		LogLines:      readableLog(t.Log),
+		DownloadText:  statValue(t.Download),
+		UploadText:    statValue(t.Upload),
+		PingText:      statValue(t.Ping),
+		JitterText:    statValue(t.Jitter),
+	}
+	if conf.EnableIDObfuscation {
+		e.PublicID = ObfuscateULID(t.UUID)
+	}
+
+	e.Extra, e.ExtraText = readableFields(t.Extra)
+
+	var info Result
+	if err := json.Unmarshal([]byte(t.ISPInfo), &info); err != nil {
+		e.ISPInfoText = strings.TrimSpace(t.ISPInfo)
+	} else {
+		e.Lookup = info.ProcessedString
+		e.ISP = ispName(info.ProcessedString)
+		if e.ISP == "" {
+			e.ISP = info.RawISPInfo.Organization
+		}
+		var place []string
+		country := info.RawISPInfo.Country
+		if code := strings.TrimSpace(info.RawISPInfo.ISOCode); code != "" && code != country {
+			country = strings.TrimSpace(country + " (" + code + ")")
+		}
+		for _, s := range []string{info.RawISPInfo.City, country} {
+			if s = strings.TrimSpace(s); s != "" {
+				place = append(place, s)
+			}
+		}
+		e.Location = strings.Join(place, ", ")
+	}
+	return e
+}
+
+// statValue shows a missing measurement as "--", like the speed test page
+func statValue(raw string) string {
+	if raw = strings.TrimSpace(raw); raw == "" {
+		return "--"
+	}
+	return raw
+}
+
+// labels for keys the speed test frontends are known to send as extra data
+var fieldKeys = map[string]string{"server": "field.server"}
+
+// readableFields lists a stored JSON object as labeled values, nested objects
+// under "parent › child". Anything that is not a JSON object comes back as text.
+func readableFields(raw string) ([]StatsField, string) {
+	raw = strings.TrimSpace(raw)
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.UseNumber()
+	var obj map[string]any
+	if err := dec.Decode(&obj); err != nil {
+		var text string
+		if json.Unmarshal([]byte(raw), &text) == nil {
+			return nil, strings.TrimSpace(text)
+		}
+		if raw == "null" {
+			return nil, ""
+		}
+		return nil, raw
+	}
+	var fields []StatsField
+	flattenFields(&fields, "", "", obj)
+	return fields, ""
+}
+
+// flattenFields appends v under label; key is the label's translation key, if any
+func flattenFields(fields *[]StatsField, label, key string, v any) {
+	switch v := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			var childKey string
+			if label == "" {
+				childKey = fieldKeys[k]
+			}
+			flattenFields(fields, joinLabel(label, humanizeKey(k)), childKey, v[k])
+		}
+	case []any:
+		var scalars []string
+		for i, item := range v {
+			switch item.(type) {
+			case map[string]any, []any:
+				flattenFields(fields, joinLabel(label, strconv.Itoa(i+1)), "", item)
+			default:
+				if s := scalarText(item); s != "" {
+					scalars = append(scalars, s)
+				}
+			}
+		}
+		if len(scalars) > 0 {
+			*fields = append(*fields, StatsField{Key: key, Label: label, Value: strings.Join(scalars, ", ")})
+		}
+	default:
+		if s := scalarText(v); s != "" {
+			*fields = append(*fields, StatsField{Key: key, Label: label, Value: s})
+		}
 	}
 }
 
-const htmlTemplate = `<!DOCTYPE html>
-<html>
-<head>
-<title>LibreSpeed - Stats</title>
-<style type="text/css">
-	html,body{
-		margin:0;
-		padding:0;
-		border:none;
-		width:100%; min-height:100%;
+func scalarText(v any) string {
+	switch v := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(v)
+	case bool:
+		if v {
+			return "yes"
+		}
+		return "no"
+	default:
+		return fmt.Sprint(v)
 	}
-	html{
-		background-color: hsl(198,72%,35%);
-		font-family: "Segoe UI","Roboto",sans-serif;
-	}
-	body{
-		background-color:#FFFFFF;
-		box-sizing:border-box;
-		width:100%;
-		max-width:70em;
-		margin:4em auto;
-		box-shadow:0 1em 6em #00000080;
-		padding:1em 1em 4em 1em;
-		border-radius:0.4em;
-	}
-	h1,h2,h3,h4,h5,h6{
-		font-weight:300;
-		margin-bottom: 0.1em;
-	}
-	h1{
-		text-align:center;
-	}
-	table{
-		margin:2em 0;
-		width:100%;
-	}
-	table, tr, th, td {
-		border: 1px solid #AAAAAA;
-	}
-	th {
-		width: 6em;
-	}
-	td {
-		word-break: break-all;
-	}
-</style>
-</head>
-<body>
-<h1>LibreSpeed - Stats</h1>
-{{ if .NoPassword }}
-		Please set statistics_password in settings.toml to enable access.
-{{ else if .LoggedIn }}
-	<form action="stats" method="GET"><input type="hidden" name="op" value="logout" /><input type="submit" value="Logout" /></form>
-	<form action="stats" method="GET">
-		<h3>Search test results</h6>
-		<input type="hidden" name="op" value="id" />
-		<input type="text" name="id" id="id" placeholder="Test ID" value=""/>
-		<input type="submit" value="Find" />
-		<input type="submit" onclick="document.getElementById('id').value='L100'" value="Show last 100 tests" />
-	</form>
+}
 
-	{{ range $i, $v := .Data }}
-	<table>
-		<tr><th>Test ID</th><td>{{ $v.UUID }}</td></tr>
-		<tr><th>Date and time</th><td>{{ $v.Timestamp }}</td></tr>
-		<tr><th>IP and ISP Info</th><td>{{ $v.IPAddress }}<br/>{{ $v.ISPInfo }}</td></tr>
-		<tr><th>User agent and locale</th><td>{{ $v.UserAgent }}<br/>{{ $v.Language }}</td></tr>
-		<tr><th>Download speed</th><td>{{ $v.Download }}</td></tr>
-		<tr><th>Upload speed</th><td>{{ $v.Upload }}</td></tr>
-		<tr><th>Ping</th><td>{{ $v.Ping }}</td></tr>
-		<tr><th>Jitter</th><td>{{ $v.Jitter }}</td></tr>
-		<tr><th>Log</th><td>{{ $v.Log }}</td></tr>
-		<tr><th>Extra info</th><td>{{ $v.Extra }}</td></tr>
-	</table>
-	{{ end }}
-{{ else }}
-	<form action="stats?op=login" method="POST">
-		<h3>Login</h3>
-		<input type="password" name="password" placeholder="Password" value=""/>
-		<input type="submit" value="Login" />
-	</form>
-{{ end }}
-</body>
-</html>`
+func joinLabel(prefix, label string) string {
+	if prefix == "" {
+		return label
+	}
+	return prefix + " › " + label
+}
+
+// humanizeKey turns "serverName", "server_name" and "server-name" into "Server name"
+func humanizeKey(k string) string {
+	var b strings.Builder
+	prevLower := false
+	for _, r := range k {
+		switch {
+		case r == '_' || r == '-' || r == '.':
+			b.WriteRune(' ')
+			prevLower = false
+			continue
+		case unicode.IsUpper(r) && prevLower:
+			b.WriteRune(' ')
+		}
+		b.WriteRune(unicode.ToLower(r))
+		prevLower = unicode.IsLower(r) || unicode.IsDigit(r)
+	}
+	s := strings.Join(strings.Fields(b.String()), " ")
+	for _, word := range []string{"ip", "isp", "id", "url", "asn", "iso"} {
+		s = replaceWord(s, word, strings.ToUpper(word))
+	}
+	if s == "" {
+		return k
+	}
+	r, size := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[size:]
+}
+
+func replaceWord(s, word, with string) string {
+	words := strings.Split(s, " ")
+	for i, w := range words {
+		if w == word {
+			words[i] = with
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+// readableLanguages turns an Accept-Language header into "uk-UA, uk, en-US"
+func readableLanguages(header string) string {
+	var langs []string
+	for _, part := range strings.Split(header, ",") {
+		tag, _, _ := strings.Cut(part, ";")
+		if tag = strings.TrimSpace(tag); tag != "" && tag != "*" {
+			langs = append(langs, tag)
+		}
+	}
+	return strings.Join(langs, ", ")
+}
+
+var (
+	logLineRegex = regexp.MustCompile(`^(\d{10,}): (.*)$`)
+	logTookRegex = regexp.MustCompile(`, took (\d+)ms$`)
+	logPingRegex = regexp.MustCompile(`^ping: (\S+) jitter: (\S+)$`)
+)
+
+// readableLog turns the speed test log, lines of "<unix ms>: <event>", into
+// events timed from the first one, with the usual events spelled out.
+func readableLog(raw string) []LogLine {
+	var lines []LogLine
+	var start int64 = -1
+	for _, line := range strings.Split(strings.TrimSpace(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		m := logLineRegex.FindStringSubmatch(line)
+		if m == nil {
+			lines = append(lines, LogLine{Text: line})
+			continue
+		}
+		at, _ := strconv.ParseInt(m[1], 10, 64)
+		if start < 0 {
+			start = at
+		}
+		lines = append(lines, LogLine{
+			At:   strconv.FormatFloat(float64(at-start)/1000, 'f', 2, 64) + " s",
+			Text: readableLogEvent(m[2]),
+		})
+	}
+	return lines
+}
+
+func readableLogEvent(event string) string {
+	var took string
+	if m := logTookRegex.FindStringSubmatch(event); m != nil {
+		ms, _ := strconv.ParseFloat(m[1], 64)
+		took = ", took " + strconv.FormatFloat(ms/1000, 'f', 2, 64) + " s"
+		event = strings.TrimSuffix(event, m[0])
+	}
+
+	name, value, _ := strings.Cut(event, ": ")
+	switch name {
+	case "IP":
+		var info Result
+		if json.Unmarshal([]byte(value), &info) == nil && info.ProcessedString != "" {
+			value = info.ProcessedString
+		}
+		event = "IP lookup: " + value
+	case "dlTest":
+		event = "Download: " + value + " Mbps"
+	case "ulTest":
+		event = "Upload: " + value + " Mbps"
+	case "ping":
+		if m := logPingRegex.FindStringSubmatch(event); m != nil {
+			event = "Ping: " + m[1] + " ms, jitter: " + m[2] + " ms"
+		}
+	}
+	return event + took
+}
