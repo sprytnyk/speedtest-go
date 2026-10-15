@@ -51,6 +51,10 @@ func Open(databaseFile string) *SQLite {
 	if _, err := conn.Exec(stmt); err != nil {
 		log.Fatalf("Failed to create speedtest_users table: %s", err)
 	}
+	// results are looked up by uuid on every result image/JSON request
+	if _, err := conn.Exec(`CREATE INDEX IF NOT EXISTS speedtest_users_uuid_idx ON speedtest_users (uuid);`); err != nil {
+		log.Fatalf("Failed to create speedtest_users uuid index: %s", err)
+	}
 
 	return &SQLite{db: conn}
 }

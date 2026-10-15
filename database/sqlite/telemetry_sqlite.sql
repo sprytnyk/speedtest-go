@@ -19,3 +19,5 @@ CREATE TABLE IF NOT EXISTS `speedtest_users` (
     `log`       TEXT,
     `uuid`      TEXT
 );
+
+CREATE INDEX IF NOT EXISTS `speedtest_users_uuid_idx` ON `speedtest_users` (`uuid`);

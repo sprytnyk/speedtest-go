@@ -109,6 +109,13 @@ ALTER TABLE ONLY speedtest_users
 
 
 --
+-- Name: speedtest_users_uuid_idx; Type: INDEX; Schema: public; Owner: speedtest
+--
+
+CREATE INDEX speedtest_users_uuid_idx ON speedtest_users USING btree (uuid);
+
+
+--
 -- PostgreSQL database dump complete
 --
 

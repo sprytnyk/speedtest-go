@@ -15,7 +15,7 @@ CREATE TABLE [dbo].[speedtest_users](
     [ping]      [nvarchar](max) NULL,
     [jitter]    [nvarchar](max) NULL,
     [log]       [nvarchar](max) NULL,
-    [uuid]      [nvarchar](max) NULL,
+    [uuid]      [nvarchar](64) NULL,
  CONSTRAINT [PK_speedtest_users] PRIMARY KEY CLUSTERED
 (
     [id] ASC
@@ -24,4 +24,7 @@ CREATE TABLE [dbo].[speedtest_users](
 GO
 
 ALTER TABLE [dbo].[speedtest_users] ADD  CONSTRAINT [DF_speedtest_users_timestamp]  DEFAULT (getdate()) FOR [timestamp]
+GO
+
+CREATE NONCLUSTERED INDEX [IX_speedtest_users_uuid] ON [dbo].[speedtest_users] ([uuid])
 GO

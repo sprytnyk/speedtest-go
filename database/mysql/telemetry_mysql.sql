@@ -33,7 +33,7 @@ CREATE TABLE `speedtest_users` (
   `jitter` text,
   `log` longtext,
   `uuid` text
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 --
 -- Indexes for dumped tables
@@ -43,7 +43,8 @@ CREATE TABLE `speedtest_users` (
 -- Indexes for table `speedtest_users`
 --
 ALTER TABLE `speedtest_users`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `speedtest_users_uuid_idx` (`uuid`(26));
 
 --
 -- AUTO_INCREMENT for dumped tables
