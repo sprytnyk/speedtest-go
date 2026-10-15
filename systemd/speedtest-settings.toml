@@ -8,19 +8,24 @@ proxyprotocol_port=0
 # assets directory path, defaults to `assets` in the same directory
 assets_path="/usr/local/share/speedtest/assets"
 
+# ISP lookup API, {ip} is replaced with the client's IP; set to "" to disable lookups.
+# The response must be JSON with "ip", "city", "country", "iso_code" and "org" fields.
+ip_lookup_url="https://ip.sprytnyk.dev/api/ip/{ip}/"
+
 # password for logging into statistics page
 statistics_password="PASSWORD"
 # redact IP addresses
 redact_ip_addresses=false
 
-# database type for statistics data, currently supports: none, memory, bolt, mysql, postgresql
+# database type for statistics data, currently supports: none, memory, bolt, mysql, postgresql, sqlite, mssql
 # if none is specified, no telemetry/stats will be recorded, and no result PNG will be generated
 #database_type="bolt"
 database_type="memory"
+# for mysql, use "tcp(host:port)" or "unix(/path/to/mysqld.sock)" instead of a bare hostname
 database_hostname=""
 database_name=""
 database_username=""
 database_password=""
 
-# if you use `bolt` as database, set database_file to database file location
+# if you use `bolt` or `sqlite` as database, set database_file to database file location
 database_file="/usr/local/var/speedtest/speedtest.db"

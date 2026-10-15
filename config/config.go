@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"net/url"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -19,6 +21,8 @@ type Config struct {
 
 	AssetsPath string `mapstructure:"assets_path"`
 
+	IPLookupURL string `mapstructure:"ip_lookup_url"`
+
 	DatabaseType     string `mapstructure:"database_type"`
 	DatabaseHostname string `mapstructure:"database_hostname"`
 	DatabaseName     string `mapstructure:"database_name"`
@@ -33,6 +37,13 @@ type Config struct {
 	TLSCertFile string `mapstructure:"tls_cert_file"`
 	TLSKeyFile  string `mapstructure:"tls_key_file"`
 }
+
+// DefaultIPLookupURL is the IP information API used for ISP and country detection.
+// See https://ip.sprytnyk.dev/openapi.json for the schema.
+const DefaultIPLookupURL = "https://ip.sprytnyk.dev/api/ip/{ip}/"
+
+// IPLookupPlaceholder is replaced with the client's IP in ip_lookup_url.
+const IPLookupPlaceholder = "{ip}"
 
 var (
 	configFile   string
@@ -50,6 +61,7 @@ func init() {
 	viper.SetDefault("redact_ip_addresses", false)
 	viper.SetDefault("enable_id_obfuscation", false)
 	viper.SetDefault("assets_path", "")
+	viper.SetDefault("ip_lookup_url", DefaultIPLookupURL)
 	viper.SetDefault("database_type", "postgresql")
 	viper.SetDefault("database_hostname", "localhost")
 	viper.SetDefault("database_name", "speedtest")
@@ -83,6 +95,15 @@ func Load(configPath string) Config {
 
 	if err := viper.Unmarshal(&conf); err != nil {
 		log.Fatalf("Error parsing config: %s", err)
+	}
+
+	if conf.IPLookupURL != "" {
+		if !strings.Contains(conf.IPLookupURL, IPLookupPlaceholder) {
+			log.Fatalf("ip_lookup_url must contain the %s placeholder: %s", IPLookupPlaceholder, conf.IPLookupURL)
+		}
+		if u, err := url.Parse(conf.IPLookupURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			log.Fatalf("ip_lookup_url must be an absolute http(s) URL: %s", conf.IPLookupURL)
+		}
 	}
 
 	loadedConfig = &conf

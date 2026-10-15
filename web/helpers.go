@@ -3,20 +3,17 @@ package web
 import (
 	"crypto/rand"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/librespeed/speedtest-go/config"
 	"github.com/librespeed/speedtest-go/results"
 )
-
-// ipLookupURL is the IP information API used for ISP and country detection.
-// See https://ip.sprytnyk.dev/openapi.json for the schema.
-const ipLookupURL = "https://ip.sprytnyk.dev/api/ip/%s/"
 
 var ipLookupClient = &http.Client{Timeout: 5 * time.Second}
 
@@ -28,12 +25,18 @@ func getRandomData(length int) []byte {
 	return data
 }
 
-// lookupISPInfo looks up ISP and location details for the given IP address.
-// An empty result is returned if the lookup fails or the IP is unknown.
+// lookupISPInfo looks up ISP and location details for the given IP address
+// using the configured ip_lookup_url. An empty result is returned if lookups
+// are disabled, the lookup fails or the IP is unknown.
 func lookupISPInfo(addr string) results.IPInfoResponse {
 	var ret results.IPInfoResponse
 
-	resp, err := ipLookupClient.Get(fmt.Sprintf(ipLookupURL, url.PathEscape(addr)))
+	lookupURL := config.LoadedConfig().IPLookupURL
+	if lookupURL == "" {
+		return ret
+	}
+
+	resp, err := ipLookupClient.Get(strings.ReplaceAll(lookupURL, config.IPLookupPlaceholder, url.PathEscape(addr)))
 	if err != nil {
 		log.Errorf("Error getting response from IP lookup API: %s", err)
 		return ret
