@@ -20,6 +20,13 @@ func Open(databaseFile string) *SQLite {
 		log.Fatalf("Cannot open SQLite database: %s", err)
 	}
 
+	// SQLite allows a single writer; with a connection pool, concurrent inserts
+	// fail immediately with SQLITE_BUSY instead of waiting for each other
+	conn.SetMaxOpenConns(1)
+	if _, err := conn.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		log.Warnf("Failed to set SQLite busy timeout: %s", err)
+	}
+
 	// Enable WAL mode for better concurrent performance
 	if _, err := conn.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		log.Warnf("Failed to set SQLite journal mode to WAL: %s", err)
@@ -49,16 +56,8 @@ func Open(databaseFile string) *SQLite {
 }
 
 func (p *SQLite) Insert(data *schema.TelemetryData) error {
-	var existingID int
-	// Check for duplicate UUID first
-	err := p.db.QueryRow(`SELECT id FROM speedtest_users WHERE uuid = ?`, data.UUID).Scan(&existingID)
-	if err == nil {
-		// Record with this UUID already exists - skip insert
-		return nil
-	}
-
 	stmt := `INSERT INTO speedtest_users (ip, ispinfo, extra, ua, lang, dl, ul, ping, jitter, log, uuid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
-	_, err = p.db.Exec(stmt, data.IPAddress, data.ISPInfo, data.Extra, data.UserAgent, data.Language, data.Download, data.Upload, data.Ping, data.Jitter, data.Log, data.UUID)
+	_, err := p.db.Exec(stmt, data.IPAddress, data.ISPInfo, data.Extra, data.UserAgent, data.Language, data.Download, data.Upload, data.Ping, data.Jitter, data.Log, data.UUID)
 	return err
 }
 
@@ -91,5 +90,5 @@ func (p *SQLite) FetchLast100() ([]schema.TelemetryData, error) {
 			records = append(records, record)
 		}
 	}
-	return records, nil
+	return records, rows.Err()
 }
