@@ -3,7 +3,7 @@ package web
 import (
 	"net"
 	"net/http"
-	"regexp"
+	"net/netip"
 	"strings"
 )
 
@@ -45,7 +45,7 @@ func getClientIP(r *http.Request) string {
 	// 1. Cloudflare IPv6 header — must be a valid IPv6 address
 	if cf := r.Header.Get("CF-Connecting-IPv6"); cf != "" {
 		if ip := normalizeCandidateIP(cf, true); ip != "" {
-			return strings.TrimPrefix(ip, "::ffff:")
+			return ip
 		}
 	}
 
@@ -53,7 +53,7 @@ func getClientIP(r *http.Request) string {
 	for _, header := range []string{"Client-IP", "X-Real-IP", "X-Forwarded-For"} {
 		if v := r.Header.Get(header); v != "" {
 			if ip := normalizeCandidateIP(v, false); ip != "" {
-				return strings.TrimPrefix(ip, "::ffff:")
+				return ip
 			}
 		}
 	}
@@ -71,50 +71,37 @@ func getClientIP(r *http.Request) string {
 	return ""
 }
 
+// specialRanges lists private and special-purpose ranges, mirroring the PHP
+// getLocalOrPrivateIpInfo() function. Addresses in these ranges are never sent
+// to the ISP lookup API.
+var specialRanges = []struct {
+	prefix netip.Prefix
+	desc   string
+}{
+	{netip.MustParsePrefix("::1/128"), "localhost IPv6 access"},
+	{netip.MustParsePrefix("fe80::/10"), "link-local IPv6 access"},
+	{netip.MustParsePrefix("fc00::/7"), "ULA IPv6 access"},
+	{netip.MustParsePrefix("127.0.0.0/8"), "localhost IPv4 access"},
+	{netip.MustParsePrefix("10.0.0.0/8"), "private IPv4 access"},
+	{netip.MustParsePrefix("172.16.0.0/12"), "private IPv4 access"},
+	{netip.MustParsePrefix("192.168.0.0/16"), "private IPv4 access"},
+	{netip.MustParsePrefix("169.254.0.0/16"), "link-local IPv4 access"},
+	{netip.MustParsePrefix("100.64.0.0/10"), "CGNAT IPv4 access"},
+}
+
 // classifyPrivateIP returns a human-readable description if the IP is a
 // private or special-purpose address, or an empty string otherwise.
-// Mirrors the PHP getLocalOrPrivateIpInfo() function.
 func classifyPrivateIP(ip string) string {
-	// Strip IPv4-mapped IPv6 prefix if present
-	ip = strings.TrimPrefix(ip, "::ffff:")
-
-	switch {
-	case ip == "::1":
-		return "localhost IPv6 access"
-	case strings.HasPrefix(ip, "fe80:"):
-		return "link-local IPv6 access"
-	// ULA IPv6 (fc00::/7): fc00:: - fdff:ffff:...
-	case isULAIPv6(ip):
-		return "ULA IPv6 access"
-	case strings.HasPrefix(ip, "127."):
-		return "localhost IPv4 access"
-	case strings.HasPrefix(ip, "10."):
-		return "private IPv4 access"
-	case mustCompile(`^172\.(1[6-9]|2\d|3[01])\.`).MatchString(ip):
-		return "private IPv4 access"
-	case strings.HasPrefix(ip, "192.168"):
-		return "private IPv4 access"
-	case strings.HasPrefix(ip, "169.254"):
-		return "link-local IPv4 access"
-	case mustCompile(`^100\.([6-9][0-9]|1[0-2][0-7])\.`).MatchString(ip):
-		return "CGNAT IPv4 access"
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ""
+	}
+	// Prefix.Contains never matches zoned or IPv4-mapped addresses
+	addr = addr.WithZone("").Unmap()
+	for _, r := range specialRanges {
+		if r.prefix.Contains(addr) {
+			return r.desc
+		}
 	}
 	return ""
-}
-
-// isULAIPv6 checks if an IP is a Unique Local IPv6 Unicast Address (fc00::/7).
-func isULAIPv6(ipStr string) bool {
-	ip := net.ParseIP(ipStr)
-	if ip == nil || ip.To16() == nil {
-		return false
-	}
-	// fc00::/7 means the first 7 bits are 1111110
-	// So the first byte & 0xFE must equal 0xFC
-	return ip[0]&0xFE == 0xFC
-}
-
-// mustCompile is a helper that compiles a regex and panics on error
-// (safe to use for static patterns).
-func mustCompile(pattern string) *regexp.Regexp {
-	return regexp.MustCompile(pattern)
 }
