@@ -1,6 +1,8 @@
 module github.com/librespeed/speedtest-go
 
-go 1.25.0
+go 1.27.0
+
+toolchain go1.27.2
 
 require (
 	github.com/breml/rootcerts v0.2.1
@@ -19,7 +21,7 @@ require (
 	github.com/sirupsen/logrus v1.8.3
 	github.com/spf13/viper v1.10.1
 	go.etcd.io/bbolt v1.3.6
-	golang.org/x/image v0.41.0
+	golang.org/x/image v0.45.0
 	modernc.org/sqlite v1.50.0
 )
 
@@ -43,9 +45,9 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
-	golang.org/x/crypto v0.52.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/ini.v1 v1.66.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
