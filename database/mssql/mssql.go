@@ -77,5 +77,5 @@ func (p *MSSQL) FetchLast100() ([]schema.TelemetryData, error) {
 			records = append(records, record)
 		}
 	}
-	return records, nil
+	return records, rows.Err()
 }
