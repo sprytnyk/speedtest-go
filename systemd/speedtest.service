@@ -95,6 +95,7 @@ UMask=027
 
 CapabilityBoundingSet=
 LockPersonality=true
+# Breaks UPX-packed binaries, which unpack themselves into executable memory
 MemoryDenyWriteExecute=true
 NoNewPrivileges=yes
 PrivateTmp=yes

@@ -15,8 +15,10 @@ builds:
     ldflags:
       - -w -s
     goos:
-      - windows
       - linux
+      - windows
+      - darwin
+      - freebsd
     goarch:
       - 386
       - amd64
@@ -27,58 +29,17 @@ builds:
       - 6
       - 7
     ignore:
+      # Go dropped windows/arm (32-bit) in 1.26
       - goos: windows
         goarch: arm
-      - goos: windows
-        goarch: arm64
-    hooks:
-      post: upx -9 "{{ .Path }}"
-  - main: ./main.go
-    id: speedtest-backend-darwin
-    binary: speedtest-backend
-    env:
-      - CGO_ENABLED=0
-    flags:
-      - -trimpath
-    ldflags:
-      - -w -s
-    goos:
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-  - main: ./main.go
-    id: speedtest-backend-freebsd
-    binary: speedtest-backend
-    env:
-      - CGO_ENABLED=0
-    flags:
-      - -trimpath
-    ldflags:
-      - -w -s
-    goos:
-      - freebsd
-    goarch:
-      - amd64
-      - arm64
-  - main: ./main.go
-    id: speedtest-backend-noupx-windows-arm64
-    binary: speedtest-backend
-    env:
-      - CGO_ENABLED=0
-    flags:
-      - -trimpath
-    ldflags:
-      - -w -s
-    goos:
-      - windows
-    goarch:
-      - arm
-      - arm64
-    goarm:
-      - 5
-      - 6
-      - 7
+      - goos: darwin
+        goarch: 386
+      - goos: darwin
+        goarch: arm
+      - goos: freebsd
+        goarch: 386
+      - goos: freebsd
+        goarch: arm
 archives:
   - format_overrides:
       - goos: windows
