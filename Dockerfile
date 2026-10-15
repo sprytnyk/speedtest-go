@@ -6,8 +6,8 @@ RUN go mod download
 COPY ./ ./
 
 ENV CGO_ENABLED=0
-ARG TARGETOS TARGETARCH
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags "-w -s" -trimpath -buildvcs=false -o speedtest .
+ARG TARGETOS TARGETARCH VERSION=dev
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags "-w -s -X main.version=$VERSION" -trimpath -buildvcs=false -o speedtest .
 
 FROM scratch
 WORKDIR /app
