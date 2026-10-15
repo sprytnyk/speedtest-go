@@ -75,11 +75,11 @@ func TestIPRedaction(t *testing.T) {
 
 func TestIPRedactionChain(t *testing.T) {
 	tests := []struct {
-		name      string
-		ispInfo   string
-		logs      string
-		wantISP   string
-		wantLogs  string
+		name     string
+		ispInfo  string
+		logs     string
+		wantISP  string
+		wantLogs string
 	}{
 		{
 			name:     "IPv4 client: addresses and hostname redacted",

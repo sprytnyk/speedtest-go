@@ -6,8 +6,8 @@ import (
 
 	"github.com/librespeed/speedtest-go/database/schema"
 
-	_ "modernc.org/sqlite"
 	log "github.com/sirupsen/logrus"
+	_ "modernc.org/sqlite"
 )
 
 type SQLite struct {

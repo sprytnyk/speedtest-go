@@ -23,12 +23,12 @@ type StatsData struct {
 var (
 	key   = []byte(securecookie.GenerateRandomKey(32))
 	store = sessions.NewCookieStore(key)
-	conf = config.LoadedConfig()
+	conf  = config.LoadedConfig()
 )
 
 func init() {
 	store.Options = &sessions.Options{
-		Path:     conf.BaseURL+"/stats",
+		Path:     conf.BaseURL + "/stats",
 		MaxAge:   3600 * 1, // 1 hour
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
