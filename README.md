@@ -88,6 +88,11 @@ go build -ldflags "-w -s -X main.version=$(git describe --tags)" -trimpath -o sp
 The web UI from `web/assets` is embedded in the binary, so `speedtest-backend` and `settings.toml` are all you need
 to copy to the server.
 
+`scripts/build-release.sh` builds the release archives and their `SHA256SUMS` for every platform into `dist/`. The
+*Release builds* workflow runs it for every version tag, and from the Actions tab for any branch, and keeps the
+archives as a downloadable artifact of the run. The builds are reproducible, so the same commit gives the same
+checksums on any machine with the same Go toolchain.
+
 ## Configuration
 
 Settings are read from `settings.toml`; the file in this repository lists every key with a comment. Each key can
