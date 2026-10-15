@@ -219,6 +219,7 @@ in the top bar changes it. The page texts live in `web/assets/javascript/i18n.js
 
 Copyright (C) 2016-2020 Federico Dossena
 Copyright (C) 2020 Maddie Zhan
+Copyright (C) 2026 Vladyslav Krylasov
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published by
