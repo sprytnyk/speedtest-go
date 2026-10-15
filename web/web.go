@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -34,6 +34,9 @@ var defaultAssets embed.FS
 var (
 	// generate random data for download test on start to minimize runtime overhead
 	randomData = getRandomData(chunkSize)
+
+	// strips the AS number from the ISP organization, e.g. "AS12345 Example ISP"
+	asNumberRegexp = regexp.MustCompile(`AS\d+\s`)
 )
 
 func ListenAndServe(conf *config.Config) error {
@@ -117,22 +120,13 @@ func listenProxyProtocol(conf *config.Config, r *chi.Mux) {
 }
 
 func pages(fs http.FileSystem, BaseURL string) http.HandlerFunc {
-	var removeBaseURL *regexp.Regexp
-	if BaseURL != "" {
-		removeBaseURL = regexp.MustCompile("^" + BaseURL + "/")
-	}
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	fileServer := http.FileServer(fs)
+	return func(w http.ResponseWriter, r *http.Request) {
 		if BaseURL != "" {
-			r.URL.Path = removeBaseURL.ReplaceAllString(r.URL.Path, "/")
+			r.URL.Path = "/" + strings.TrimPrefix(r.URL.Path, BaseURL+"/")
 		}
-		if r.RequestURI == "/" {
-			r.RequestURI = "/index.html"
-		}
-
-		http.FileServer(fs).ServeHTTP(w, r)
+		fileServer.ServeHTTP(w, r)
 	}
-
-	return fn
 }
 
 // sendPHPCORSHeaders sets CORS headers matching the PHP backend's ?cors parameter behavior.
@@ -146,7 +140,7 @@ func sendPHPCORSHeaders(w http.ResponseWriter, r *http.Request) {
 }
 
 func empty(w http.ResponseWriter, r *http.Request) {
-	_, err := io.Copy(ioutil.Discard, r.Body)
+	_, err := io.Copy(io.Discard, r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -221,8 +215,7 @@ func getIP(w http.ResponseWriter, r *http.Request) {
 		ispInfo := lookupISPInfo(clientIP)
 		ret.RawISPInfo = ispInfo
 
-		removeRegexp := regexp.MustCompile(`AS\d+\s`)
-		isp := removeRegexp.ReplaceAllString(ispInfo.Organization, "")
+		isp := asNumberRegexp.ReplaceAllString(ispInfo.Organization, "")
 
 		if isp == "" {
 			isp = "Unknown ISP"
