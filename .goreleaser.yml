@@ -94,6 +94,6 @@ changelog:
   sort: asc
 release:
   github:
-    owner: librespeed
+    owner: sprytnyk
     name: speedtest-go
   disable: false
