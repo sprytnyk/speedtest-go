@@ -1,13 +1,13 @@
 package results
 
 import (
+	"crypto/rand"
 	_ "embed"
 	"encoding/json"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/png"
-	"math/rand"
 	"net"
 	"net/http"
 	"regexp"
@@ -148,7 +148,12 @@ func Record(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ipAddr, _, _ := net.SplitHostPort(r.RemoteAddr)
+	// RealIP middleware replaces RemoteAddr with a bare IP (no port) when a
+	// forwarding header is present
+	ipAddr, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ipAddr = r.RemoteAddr
+	}
 	userAgent := r.UserAgent()
 	language := r.Header.Get("Accept-Language")
 
@@ -160,7 +165,7 @@ func Record(w http.ResponseWriter, r *http.Request) {
 	logs := r.FormValue("log")
 	extra := r.FormValue("extra")
 
-	if config.LoadedConfig().RedactIP {
+	if conf.RedactIP {
 		ipAddr = "0.0.0.0"
 		ispInfo = ipv4Regex.ReplaceAllString(ispInfo, "0.0.0.0")
 		logs = ipv4Regex.ReplaceAllString(logs, "0.0.0.0")
@@ -186,20 +191,18 @@ func Record(w http.ResponseWriter, r *http.Request) {
 	record.Jitter = jitter
 	record.Log = logs
 
-	t := time.Now()
-	entropy := ulid.Monotonic(rand.New(rand.NewSource(t.UnixNano())), 0)
-	uuid := ulid.MustNew(ulid.Timestamp(t), entropy)
+	// the ID is the only thing guarding access to a result, so it must not be guessable
+	uuid := ulid.MustNew(ulid.Timestamp(time.Now()), rand.Reader)
 	record.UUID = uuid.String()
 
-	err := database.DB.Insert(&record)
-	if err != nil {
+	if err := database.DB.Insert(&record); err != nil {
 		log.Errorf("Error inserting into database: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	responseID := uuid.String()
-	if config.LoadedConfig().EnableIDObfuscation {
+	if conf.EnableIDObfuscation {
 		responseID = ObfuscateULID(uuid.String())
 	}
 
