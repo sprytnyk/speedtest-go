@@ -56,10 +56,10 @@ The test is then served at `http://<host>:8989/`.
 ### Docker
 
 Images for `linux/amd64`, `linux/arm64`, `linux/arm/v7` and `linux/386` are published to the GitHub Container
-Registry, tagged `master` for the latest build and with the version for releases:
+Registry for every release, tagged with its version (e.g. `v1.3.0`) and `latest`:
 
 ```
-docker run -d -p 8989:8989 ghcr.io/sprytnyk/speedtest-go:master
+docker run -d -p 8989:8989 ghcr.io/sprytnyk/speedtest-go:latest
 ```
 
 The image contains the repository's `settings.toml`, which keeps results in memory. Change settings with

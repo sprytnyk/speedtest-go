@@ -1,11 +1,10 @@
 name: Docker
 on:
   push:
-    branches: [ "master" ]
-    # Publish semver tags as releases.
+    # Publish an image for every version tag.
     tags: [ 'v*.*.*' ]
-  pull_request:
-    branches: [ "master" ]
+  # Or for any branch or tag from the Actions tab.
+  workflow_dispatch:
 
 env:
   # Use docker.io for Docker Hub if empty
@@ -33,10 +32,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
@@ -50,15 +47,21 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # v1.3.0 and latest for tags, the branch name for manual runs
+          tags: |
+            type=ref,event=tag
+            type=ref,event=branch
+          flavor: |
+            latest=${{ startsWith(github.ref, 'refs/tags/v') }}
 
-      # Build and push Docker image with Buildx (don't push on PR)
+      # Build and push Docker image with Buildx
       # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ env.PLATFORMS }}
