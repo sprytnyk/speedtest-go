@@ -1,374 +1,1050 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <link rel="shortcut icon" href="favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no" />
     <meta charset="UTF-8" />
-    <title>LibreSpeed - Stability Test</title>
-    <style type="text/css">
-      html,
-      body {
-        border: none;
-        padding: 0;
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Measure latency, jitter and failed requests over time." />
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="icon" href="images/favicon.svg" />
+    <title data-i18n="stab.title">LibreSpeed - Stability Test</title>
+    <script type="text/javascript" src="javascript/i18n.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-start: #0f172a;
+        --bg-mid: #1e293b;
+        --surface: #1e293b;
+        --raised: rgba(51, 65, 85, 0.5);
+        --raised-hover: #334155;
+        --inset: #0f172a;
+        --border: #334155;
+        --text: #e2e8f0;
+        --text-strong: #ffffff;
+        --text-soft: #cbd5e1;
+        --text-muted: #94a3b8;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --link: #60a5fa;
+        --link-hover: #93c5fd;
+        --stop: #e11d48;
+        --stop-hover: #be123c;
+        --ok: #34d399;
+        --warn: #fbbf24;
+        --bad: #fb7185;
+        --series: #3b82f6;
+        --failed: #f43f5e;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
         margin: 0;
-        background: #ffffff;
-        color: #202020;
+        padding: 0;
       }
+
       body {
-        text-align: center;
-        font-family: "Roboto", sans-serif;
+        font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+          "Noto Color Emoji";
+        min-height: 100vh;
+        background: linear-gradient(to bottom right, var(--bg-start), var(--bg-mid), var(--bg-start)) fixed;
+        color: var(--text);
+        line-height: 1.5;
       }
-      h1 {
-        color: #404040;
-      }
-      nav {
-        margin-bottom: 1em;
-      }
-      nav a {
-        color: #6060aa;
+
+      a {
+        color: var(--link);
         text-decoration: none;
-        font-size: 0.95em;
+        transition: color 0.15s ease;
       }
-      nav a:hover {
-        text-decoration: underline;
+
+      a:hover {
+        color: var(--link-hover);
       }
-      #controls {
-        margin: 1em auto;
+
+      :focus-visible {
+        outline: 2px solid var(--link);
+        outline-offset: 2px;
       }
-      #durationSelect,
-      #targetSelect {
-        font-size: 1em;
-        padding: 0.3em 0.5em;
-        margin-right: 1em;
+
+      [hidden] {
+        display: none !important;
       }
-      #startBtn {
-        display: inline-block;
+
+      /* Layout: one column on small screens, a dashboard that fits the window on large ones */
+
+      .page {
+        max-width: 48rem;
         margin: 0 auto;
-        color: #6060aa;
-        background-color: rgba(0, 0, 0, 0);
-        border: 0.15em solid #6060ff;
-        border-radius: 0.3em;
-        transition: all 0.3s;
-        box-sizing: border-box;
-        width: 8em;
-        height: 3em;
-        line-height: 2.7em;
-        cursor: pointer;
-        box-shadow:
-          0 0 0 rgba(0, 0, 0, 0.1),
-          inset 0 0 0 rgba(0, 0, 0, 0.1);
+        padding: 1rem 1rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
       }
-      #startBtn:hover {
-        box-shadow:
-          0 0 2em rgba(0, 0, 0, 0.1),
-          inset 0 0 1em rgba(0, 0, 0, 0.1);
+
+      /* the column wrappers only matter in the wide layout; here the cards are ordered directly */
+      .col-side,
+      .col-main {
+        display: contents;
       }
-      #startBtn.disabled {
-        color: #a0a0a0;
-        border-color: #c0c0c0;
-        cursor: default;
-        opacity: 0.8;
+
+      .topbar {
+        order: 0;
       }
-      #startBtn.disabled:hover {
-        box-shadow:
-          0 0 0 rgba(0, 0, 0, 0.1),
-          inset 0 0 0 rgba(0, 0, 0, 0.1);
+      .controls {
+        order: 1;
       }
-      #startBtn:before {
-        content: "Start";
+      .results {
+        order: 2;
       }
-      #startBtn.finding:before {
-        content: "Finding...";
+      .chart-card {
+        order: 3;
       }
-      #startBtn.running {
-        background-color: #ff3030;
-        border-color: #ff6060;
-        color: #ffffff;
-        cursor: pointer;
-        opacity: 1;
-      }
-      #startBtn.running:before {
-        content: "Abort";
-      }
-      #resetBtn {
-        display: inline-block;
-        color: #808080;
-        background-color: rgba(0, 0, 0, 0);
-        border: 0.15em solid #a0a0a0;
-        border-radius: 0.3em;
-        transition: all 0.3s;
-        box-sizing: border-box;
-        width: 6em;
-        height: 3em;
-        line-height: 2.7em;
-        cursor: pointer;
-        margin-left: 0.5em;
-        box-shadow:
-          0 0 0 rgba(0, 0, 0, 0.1),
-          inset 0 0 0 rgba(0, 0, 0, 0.1);
-      }
-      #resetBtn:hover {
-        box-shadow:
-          0 0 2em rgba(0, 0, 0, 0.1),
-          inset 0 0 1em rgba(0, 0, 0, 0.1);
-      }
-      #serverArea {
-        margin: 0.8em 0;
-      }
-      #server {
-        font-size: 1em;
-        padding: 0.2em;
-      }
-      #test {
-        margin-top: 2em;
-        margin-bottom: 2em;
-      }
-      div.testGroup {
-        display: block;
-        margin: 0 auto;
-      }
-      div.testArea2 {
-        display: inline-block;
-        width: 10em;
-        height: 7em;
-        position: relative;
-        box-sizing: border-box;
-        text-align: center;
-      }
-      div.testArea2 div.testName {
-        display: block;
-        text-align: center;
-        font-size: 1.4em;
-      }
-      div.testArea2 div.meterText {
-        display: inline-block;
-        font-size: 2.5em;
-      }
-      div.meterText:empty:before {
-        content: "0.00";
-      }
-      div.testArea2 div.unit {
-        display: inline-block;
-      }
-      #rating {
-        font-size: 1.3em;
-        font-weight: bold;
-        margin: 0.5em 0;
-      }
-      #rating.great {
-        color: #2ecc71;
-      }
-      #rating.good {
-        color: #27ae60;
-      }
-      #rating.poor {
-        color: #e67e22;
-      }
-      #rating.bad {
-        color: #e74c3c;
-      }
-      #rating.none {
-        color: #808080;
-      }
-      #chartContainer {
-        margin: 1em auto;
-        width: 95%;
-        max-width: 60em;
-        position: relative;
-      }
-      #pingChart {
-        width: 100%;
-        height: 280px;
-        border: 1px solid #e0e0e0;
-        border-radius: 4px;
-        background: #fafafa;
-      }
-      #optionalControls {
-        margin: 1.5em auto;
-        max-width: 40em;
-      }
-      #optionalControls label {
-        display: block;
-        margin: 0.5em 0;
-      }
-      #alertThreshold {
-        vertical-align: middle;
-        width: 200px;
-      }
-      #downloadCsvBtn {
-        margin-top: 0.8em;
-        font-size: 0.9em;
-        padding: 0.4em 1em;
-        cursor: pointer;
-        border: 1px solid #6060aa;
-        background: none;
-        color: #6060aa;
-        border-radius: 0.3em;
-      }
-      #downloadCsvBtn:hover {
-        background: #6060aa;
-        color: #ffffff;
+      .options {
+        order: 4;
       }
       .footer {
-        margin: 2em 0 1em;
+        order: 5;
       }
-      .footer a {
-        color: #808080;
-        font-size: 0.85em;
+
+      .topbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem 1rem;
       }
-      @media all and (max-width: 40em) {
-        body {
-          font-size: 0.8em;
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        min-width: 0;
+      }
+
+      .icon-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 3rem;
+        height: 3rem;
+        flex-shrink: 0;
+        background-color: var(--accent);
+        border-radius: 0.875rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      }
+
+      .icon-box svg {
+        width: 1.5rem;
+        height: 1.5rem;
+        color: #fff;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-strong);
+        line-height: 1.2;
+      }
+
+      .subtitle {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+      }
+
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .back svg {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .lang-switch {
+        display: inline-flex;
+        gap: 0.25rem;
+        padding: 0.25rem;
+        background-color: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+      }
+
+      .lang-switch button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 1.75rem;
+        border: 0;
+        border-radius: 0.5rem;
+        background: none;
+        cursor: pointer;
+        opacity: 0.5;
+        transition:
+          background-color 0.15s ease,
+          opacity 0.15s ease;
+      }
+
+      .lang-switch button:hover {
+        opacity: 0.85;
+      }
+
+      .lang-switch button[aria-pressed="true"] {
+        background-color: var(--raised-hover);
+        opacity: 1;
+      }
+
+      .lang-switch svg {
+        display: block;
+        width: 1.3125rem;
+        height: 0.875rem;
+        border-radius: 2px;
+      }
+
+      .card {
+        background-color: var(--surface);
+        border-radius: 1.25rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        padding: 1.25rem 1.5rem;
+        border: 1px solid var(--border);
+      }
+
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1.25rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .card-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-strong);
+        line-height: 1.3;
+      }
+
+      .card-note {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+      }
+
+      /* Controls */
+
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+        gap: 0.75rem 1rem;
+      }
+
+      .field label {
+        display: block;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-bottom: 0.375rem;
+      }
+
+      select {
+        width: 100%;
+        appearance: none;
+        font: inherit;
+        color: var(--text-strong);
+        background: var(--inset)
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+          no-repeat right 0.75rem center / 1rem;
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 0.625rem 2.25rem 0.625rem 0.875rem;
+        cursor: pointer;
+        text-overflow: ellipsis;
+        transition: border-color 0.15s ease;
+      }
+
+      select:hover:not(:disabled) {
+        border-color: #475569;
+      }
+
+      select:disabled {
+        color: var(--text-muted);
+        cursor: not-allowed;
+      }
+
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        font: inherit;
+        font-weight: 600;
+        border-radius: 0.75rem;
+        border: 1px solid transparent;
+        padding: 0.625rem 1.25rem;
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+          background-color 0.15s ease,
+          border-color 0.15s ease,
+          opacity 0.15s ease;
+      }
+
+      .btn svg {
+        width: 1.125rem;
+        height: 1.125rem;
+      }
+
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        flex: 1;
+        background-color: var(--accent);
+        color: #fff;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background-color: var(--accent-hover);
+      }
+
+      .btn-primary.running {
+        background-color: var(--stop);
+      }
+
+      .btn-primary.running:hover {
+        background-color: var(--stop-hover);
+      }
+
+      .btn-secondary {
+        background-color: var(--raised);
+        border-color: var(--border);
+        color: var(--text);
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background-color: var(--raised-hover);
+      }
+
+      .btn-small {
+        font-size: 0.875rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.625rem;
+      }
+
+      .btn-small svg {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .progress {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .progress-track {
+        flex: 1;
+        height: 0.375rem;
+        background-color: var(--inset);
+        border-radius: 9999px;
+        overflow: hidden;
+      }
+
+      .progress-bar {
+        height: 100%;
+        width: 0;
+        background-color: var(--series);
+        border-radius: 9999px;
+        transition: width 0.2s linear;
+      }
+
+      /* Verdict */
+
+      .verdict {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid;
+      }
+
+      .verdict svg {
+        display: none;
+        width: 1.375rem;
+        height: 1.375rem;
+        flex-shrink: 0;
+        margin-top: 0.0625rem;
+      }
+
+      .verdict-title {
+        font-weight: 600;
+      }
+
+      .verdict-text {
+        font-size: 0.8125rem;
+        color: var(--text-soft);
+      }
+
+      .verdict.idle {
+        background-color: var(--raised);
+        border-color: var(--border);
+      }
+
+      .verdict.idle .verdict-title {
+        color: var(--text-strong);
+      }
+
+      .verdict.idle .verdict-text {
+        color: var(--text-muted);
+      }
+
+      .verdict.idle .icon-idle {
+        display: block;
+        color: var(--text-muted);
+      }
+
+      .verdict.ok {
+        background-color: rgba(16, 185, 129, 0.1);
+        border-color: rgba(16, 185, 129, 0.4);
+      }
+
+      .verdict.ok .verdict-title,
+      .verdict.ok .icon-ok {
+        display: block;
+        color: var(--ok);
+      }
+
+      .verdict.warn {
+        background-color: rgba(245, 158, 11, 0.1);
+        border-color: rgba(245, 158, 11, 0.4);
+      }
+
+      .verdict.warn .verdict-title,
+      .verdict.warn .icon-warn {
+        display: block;
+        color: var(--warn);
+      }
+
+      .verdict.bad {
+        background-color: rgba(244, 63, 94, 0.1);
+        border-color: rgba(244, 63, 94, 0.4);
+      }
+
+      .verdict.bad .verdict-title,
+      .verdict.bad .icon-bad {
+        display: block;
+        color: var(--bad);
+      }
+
+      /* Stats: a 12-column grid, three main tiles over four secondary ones */
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 0.75rem;
+      }
+
+      .stat {
+        grid-column: span 3;
+        background-color: var(--raised);
+        border-radius: 0.75rem;
+        padding: 0.625rem 0.875rem;
+        transition: background-color 0.15s ease;
+        min-width: 0;
+      }
+
+      .stat.main {
+        grid-column: span 4;
+        padding: 0.75rem 0.875rem;
+      }
+
+      .stat:hover {
+        background-color: var(--raised-hover);
+      }
+
+      .stat-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .stat-icon {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .stat-icon svg {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .stat-icon.blue {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+      }
+
+      .stat-icon.purple {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #a78bfa;
+      }
+
+      .stat-icon.amber {
+        background-color: rgba(245, 158, 11, 0.2);
+        color: #fbbf24;
+      }
+
+      .stat-label {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .stat-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-strong);
+        line-height: 1.25;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .stat.main .stat-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+      }
+
+      .stat-value.empty .stat-unit {
+        visibility: hidden;
+      }
+
+      .stat-unit {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-left: 0.125rem;
+      }
+
+      /* Chart */
+
+      .chart-tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1.25rem;
+      }
+
+      .key {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem 1rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        list-style: none;
+      }
+
+      .key li {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+      }
+
+      .swatch {
+        display: inline-block;
+        flex-shrink: 0;
+      }
+
+      .swatch.line {
+        width: 1rem;
+        height: 2px;
+        border-radius: 1px;
+        background-color: var(--series);
+      }
+
+      .swatch.dot {
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 50%;
+        background-color: var(--failed);
+      }
+
+      .swatch.dash {
+        width: 1rem;
+        border-top: 2px dashed var(--text-muted);
+      }
+
+      .chart {
+        position: relative;
+      }
+
+      #pingChart {
+        display: block;
+        width: 100%;
+        height: 260px;
+        touch-action: pan-y;
+      }
+
+      .tooltip {
+        position: absolute;
+        pointer-events: none;
+        background-color: var(--inset);
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 0.375rem 0.625rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+        transform: translate(-50%, calc(-100% - 12px));
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .tooltip strong {
+        color: var(--text-strong);
+        font-weight: 600;
+        margin-left: 0.375rem;
+      }
+
+      /* Options */
+
+      .threshold-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 0.375rem;
+      }
+
+      .threshold-head label {
+        font-weight: 500;
+        color: var(--text-strong);
+      }
+
+      #thresholdValue {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-soft);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .threshold-note {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+      }
+
+      input[type="range"] {
+        display: block;
+        width: 100%;
+        accent-color: var(--series);
+        cursor: pointer;
+      }
+
+      .footer {
+        text-align: center;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+      }
+
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .animate-fade-in {
+        animation: fade-in 0.5s ease-out;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .animate-fade-in {
+          animation: none;
+        }
+        .progress-bar {
+          transition: none;
+        }
+      }
+
+      /* Wide screens: controls on the left, results and a chart filling the rest of the window on the right */
+      @media screen and (min-width: 960px) {
+        .page {
+          max-width: 80rem;
+          min-height: 100vh;
+          min-height: 100dvh;
+          padding: 1rem 1.5rem;
+          display: grid;
+          grid-template-columns: 24rem minmax(0, 1fr);
+          grid-template-rows: auto 1fr;
+          gap: 1rem 1.25rem;
+        }
+        .topbar {
+          grid-column: 1 / -1;
+        }
+        .col-side,
+        .col-main {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          min-width: 0;
+        }
+        .fields {
+          grid-template-columns: 1fr 1fr;
+        }
+        #serverArea {
+          grid-column: 1 / -1;
+        }
+        .footer {
+          margin-top: auto;
+          text-align: left;
+        }
+        .chart-card {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-height: 16rem;
+        }
+        .chart {
+          flex: 1;
+          min-height: 10rem;
+        }
+        #pingChart {
+          position: absolute;
+          inset: 0;
+          height: 100%;
+        }
+      }
+
+      @media screen and (max-width: 640px) {
+        .card {
+          padding: 1rem 1.125rem;
+        }
+        .stats {
+          gap: 0.625rem;
+        }
+        .stat {
+          grid-column: span 6;
+        }
+        .stat.main {
+          padding: 0.625rem 0.75rem;
+        }
+        .stat.main .stat-head {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.375rem;
+        }
+        .stat.main .stat-value {
+          font-size: 1.375rem;
         }
         #pingChart {
           height: 200px;
         }
+        /* CSV button beside the title, key on its own line */
+        .chart-tools {
+          display: contents;
+        }
+        .key {
+          order: 1;
+          flex-basis: 100%;
+        }
       }
-      @media all and (prefers-color-scheme: dark) {
-        html,
-        body {
-          background: #202020;
-          color: #f4f4f4;
-          color-scheme: dark;
+
+      /* narrow phones: the back link and language switch get their own line and the main stats become rows, like the info rows on the IP page */
+      @media screen and (max-width: 400px) {
+        .page {
+          padding-left: 0.75rem;
+          padding-right: 0.75rem;
+        }
+        .topbar-actions {
+          order: -1;
+          flex-basis: 100%;
+          justify-content: space-between;
+        }
+        .icon-box {
+          width: 2.5rem;
+          height: 2.5rem;
+          border-radius: 0.75rem;
+        }
+        .icon-box svg {
+          width: 1.25rem;
+          height: 1.25rem;
         }
         h1 {
-          color: #e0e0e0;
+          font-size: 1.25rem;
         }
-        nav a {
-          color: #9090ff;
+        .card {
+          padding: 1rem;
         }
-        #pingChart {
-          border-color: #404040;
-          background: #1a1a1a;
+        .stat.main {
+          grid-column: 1 / -1;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
         }
-        a {
-          color: #9090ff;
+        .stat.main .stat-head {
+          flex-direction: row;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 0;
         }
-        #startBtn {
-          color: #9090ff;
-          border-color: #7070ff;
-        }
-        #startBtn.disabled {
-          color: #707070;
-          border-color: #505050;
-        }
-        #startBtn.running {
-          background-color: #ff3030;
-          border-color: #ff6060;
-          color: #ffffff;
-        }
-        #resetBtn {
-          color: #a0a0a0;
-          border-color: #606060;
-        }
-        #downloadCsvBtn {
-          color: #9090ff;
-          border-color: #9090ff;
-        }
-        #downloadCsvBtn:hover {
-          background: #9090ff;
-          color: #202020;
-        }
-        .footer a {
-          color: #a0a0a0;
+        .stat.main .stat-value {
+          font-size: 1.375rem;
         }
       }
     </style>
   </head>
   <body>
-    <h1>LibreSpeed - Stability Test</h1>
-    <nav><a href="./">&larr; Speed Test</a></nav>
-
-    <div id="controls">
-      <select id="durationSelect">
-        <option value="60">60 Seconds</option>
-        <option value="90">90 Seconds</option>
-        <option value="120">2 Minutes</option>
-        <option value="180">3 Minutes</option>
-        <option value="300">5 Minutes</option>
-      </select>
-      <select id="targetSelect" onchange="updateStartButtonState()">
-        <option value="">Local Server</option>
-        <option value="https://www.google.com/generate_204">Google</option>
-        <option value="https://www.cloudflare.com/cdn-cgi/trace">Cloudflare</option>
-        <option value="https://www.apple.com/library/test/success.html">Apple</option>
-      </select>
-      <div id="startBtn" class="disabled finding" onclick="startStop()" aria-disabled="true" title="Finding best server..."></div>
-      <div id="resetBtn" onclick="resetTest()">Reset</div>
-    </div>
-
-    <div id="serverArea" style="display: none">
-      Server:
-      <select id="server" onchange="onServerChange(this.value)"></select>
-    </div>
-
-    <div id="rating" class="none">--</div>
-
-    <div id="test">
-      <div class="testGroup">
-        <div class="testArea2">
-          <div class="testName">Current</div>
-          <div id="statCurrent" class="meterText" style="color: #aa6060"></div>
-          <div class="unit">ms</div>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <div class="icon-box" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+          </div>
+          <div>
+            <h1 data-i18n="stab.heading">Stability Test</h1>
+            <p class="subtitle" data-i18n="stab.subtitle">Measure latency, jitter and failed requests over time.</p>
+          </div>
         </div>
-        <div class="testArea2">
-          <div class="testName">Average</div>
-          <div id="statAvg" class="meterText" style="color: #aa6060"></div>
-          <div class="unit">ms</div>
+        <div class="topbar-actions">
+        <a class="back" href="./">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m12 19-7-7 7-7"></path>
+            <path d="M19 12H5"></path>
+          </svg>
+          LibreSpeed
+        </a>
+          <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:lang.label">
+            <button type="button" data-lang="en" lang="en" aria-pressed="true" aria-label="English" title="English">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <clipPath id="flag-gb-clip"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"></path></clipPath>
+                <path d="M0,0 v30 h60 v-30 z" fill="#012169"></path>
+                <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"></path>
+                <path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#flag-gb-clip)" stroke="#C8102E" stroke-width="4"></path>
+                <path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"></path>
+                <path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"></path>
+              </svg>
+            </button>
+            <button type="button" data-lang="uk" lang="uk" aria-pressed="false" aria-label="Українська" title="Українська">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" aria-hidden="true">
+                <rect width="3" height="1" fill="#0057B7"></rect>
+                <rect y="1" width="3" height="1" fill="#FFD700"></rect>
+              </svg>
+            </button>
+          </div>
         </div>
-        <div class="testArea2">
-          <div class="testName">Jitter</div>
-          <div id="statJitter" class="meterText" style="color: #aa6060"></div>
-          <div class="unit">ms</div>
-        </div>
+      </header>
+
+      <div class="col-side">
+        <section class="card controls animate-fade-in" aria-label="Test settings" data-i18n-attr="aria-label:aria.testSettings">
+          <div class="fields">
+            <div class="field">
+              <label for="durationSelect" data-i18n="stab.duration">Duration</label>
+              <select id="durationSelect">
+                <option value="60" data-i18n="stab.duration.60">1 minute</option>
+                <option value="90" data-i18n="stab.duration.90">90 seconds</option>
+                <option value="120" data-i18n="stab.duration.120">2 minutes</option>
+                <option value="180" data-i18n="stab.duration.180">3 minutes</option>
+                <option value="300" data-i18n="stab.duration.300">5 minutes</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="targetSelect" data-i18n="stab.target">Ping target</label>
+              <select id="targetSelect">
+                <option value="" data-i18n="stab.thisServer">This server</option>
+                <option value="https://www.google.com/generate_204">Google</option>
+                <option value="https://www.cloudflare.com/cdn-cgi/trace">Cloudflare</option>
+                <option value="https://www.apple.com/library/test/success.html">Apple</option>
+              </select>
+            </div>
+            <div class="field" id="serverArea" hidden>
+              <label for="server" data-i18n="field.server">Server</label>
+              <select id="server"></select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="button" id="startBtn" class="btn btn-primary" disabled>Finding server…</button>
+            <button type="button" id="resetBtn" class="btn btn-secondary" data-i18n="btn.reset">Reset</button>
+          </div>
+
+          <div class="progress">
+            <span id="elapsedText">00:00</span>
+            <div class="progress-track" role="progressbar" aria-label="Test progress" data-i18n-attr="aria-label:aria.progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progressTrack">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <span id="durationText">01:00</span>
+          </div>
+
+          <div class="verdict idle" id="verdict" role="status">
+            <svg class="icon-idle" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 16v-4"></path>
+              <path d="M12 8h.01"></path>
+            </svg>
+            <svg class="icon-ok" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="m9 12 2 2 4-4"></path>
+            </svg>
+            <svg class="icon-warn" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path>
+              <path d="M12 9v4"></path>
+              <path d="M12 17h.01"></path>
+            </svg>
+            <svg class="icon-bad" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="m15 9-6 6"></path>
+              <path d="m9 9 6 6"></path>
+            </svg>
+            <div>
+              <p class="verdict-title" id="verdictTitle">Ready</p>
+              <p class="verdict-text" id="verdictText">Press Start to measure stability.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card options animate-fade-in" aria-label="Alert" data-i18n-attr="aria-label:stab.aria.alert">
+          <div class="threshold-head">
+            <label for="alertThreshold" data-i18n="stab.threshold">Alert threshold</label>
+            <span id="thresholdValue">Off</span>
+          </div>
+          <input type="range" id="alertThreshold" min="0" max="500" step="10" value="0" aria-describedby="thresholdNote" />
+          <p class="threshold-note" id="thresholdNote" data-i18n="stab.thresholdNote">Beep when latency goes above this value.</p>
+        </section>
+
+        <footer class="footer">
+          <p><a href="./">LibreSpeed</a> · <a href="https://github.com/sprytnyk/speedtest-go" data-i18n="footer.source">Source code</a></p>
+        </footer>
       </div>
-      <div class="testGroup">
-        <div class="testArea2">
-          <div class="testName">Min</div>
-          <div id="statMin" class="meterText"></div>
-          <div class="unit">ms</div>
-        </div>
-        <div class="testArea2">
-          <div class="testName">Max</div>
-          <div id="statMax" class="meterText"></div>
-          <div class="unit">ms</div>
-        </div>
-        <div class="testArea2">
-          <div class="testName">Failed Requests</div>
-          <div id="statLoss" class="meterText"></div>
-          <div class="unit">%</div>
-        </div>
-        <div class="testArea2">
-          <div class="testName">Elapsed</div>
-          <div id="statElapsed" class="meterText">00:00</div>
-          <div class="unit"></div>
-        </div>
+
+      <div class="col-main">
+        <section class="card results animate-fade-in" aria-label="Results" data-i18n-attr="aria-label:aria.results">
+          <div class="stats">
+            <div class="stat main">
+              <div class="stat-head">
+                <div class="stat-icon blue" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="stab.current">Current</p>
+              </div>
+              <p class="stat-value"><span id="statCurrent">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+            </div>
+            <div class="stat main">
+              <div class="stat-head">
+                <div class="stat-icon purple" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m12 14 4-4"></path>
+                    <path d="M3.34 19a10 10 0 1 1 17.32 0"></path>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="stab.average">Average</p>
+              </div>
+              <p class="stat-value"><span id="statAvg">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+            </div>
+            <div class="stat main">
+              <div class="stat-head">
+                <div class="stat-icon amber" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                    <path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                    <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
+                  </svg>
+                </div>
+                <p class="stat-label" data-i18n="stab.jitter">Jitter</p>
+              </div>
+              <p class="stat-value"><span id="statJitter">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+            </div>
+            <div class="stat">
+              <p class="stat-label" data-i18n="stab.min">Min</p>
+              <p class="stat-value"><span id="statMin">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+            </div>
+            <div class="stat">
+              <p class="stat-label" data-i18n="stab.max">Max</p>
+              <p class="stat-value"><span id="statMax">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+            </div>
+            <div class="stat">
+              <p class="stat-label" data-i18n="stab.failed">Failed</p>
+              <p class="stat-value"><span id="statLoss">--</span><span class="stat-unit">%</span></p>
+            </div>
+            <div class="stat">
+              <p class="stat-label" data-i18n="stab.requests">Requests</p>
+              <p class="stat-value"><span id="statSamples">--</span></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card chart-card animate-fade-in" aria-label="Latency chart" data-i18n-attr="aria-label:stab.aria.chart">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title" data-i18n="stab.latency">Latency</h2>
+              <p class="card-note" data-i18n="stab.chart.note">Milliseconds, last 60 seconds</p>
+            </div>
+            <div class="chart-tools">
+              <ul class="key">
+                <li><span class="swatch line"></span><span data-i18n="stab.latency">Latency</span></li>
+                <li><span class="swatch dot"></span><span data-i18n="stab.key.failed">Failed request</span></li>
+                <li id="thresholdKey" hidden><span class="swatch dash"></span><span data-i18n="stab.threshold">Alert threshold</span></li>
+              </ul>
+              <button type="button" id="downloadCsvBtn" class="btn btn-secondary btn-small" aria-label="Download CSV" title="Download all samples as CSV" data-i18n-attr="aria-label:stab.csv;title:stab.csvTitle" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" x2="12" y1="15" y2="3"></line>
+                </svg>
+                CSV
+              </button>
+            </div>
+          </div>
+          <div class="chart">
+            <canvas id="pingChart" role="img" aria-label="Latency over the last 60 seconds" data-i18n-attr="aria-label:stab.chart.aria"></canvas>
+            <div class="tooltip" id="chartTooltip" hidden><span id="tooltipTime"></span><strong id="tooltipValue"></strong></div>
+          </div>
+        </section>
       </div>
-    </div>
-
-    <div id="chartContainer">
-      <canvas id="pingChart"></canvas>
-    </div>
-
-    <div id="optionalControls">
-      <label>
-        Alert threshold:
-        <input
-          type="range"
-          id="alertThreshold"
-          min="0"
-          max="500"
-          step="10"
-          value="0"
-          oninput="updateThreshold(this.value)"
-        />
-        <span id="thresholdValue">Off</span>
-      </label>
-      <button id="downloadCsvBtn" onclick="downloadCsv()">Download CSV</button>
-    </div>
-
-    <div class="footer">
-      <a href="https://github.com/sprytnyk/speedtest-go">Source code</a>
     </div>
 
     <script type="text/javascript">
@@ -392,21 +1068,22 @@
       var selectedServer = null;
       var localServerReady = false;
       var serverDiscoveryPending = false;
+      var hoverX = null; // pointer position over the chart, in CSS pixels
+      var dirty = true; // redraw on the next animation frame
 
-      // Dark mode detection for canvas colors
-      var isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-      try {
-        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function (e) {
-          isDark = e.matches;
-        });
-      } catch (e) {}
-
-      // Chart constants
+      // Chart colors, validated against the card surface for lightness, contrast and color-blind separation
+      var CHART_COLORS = {
+        series: "#3b82f6",
+        seriesFillTop: "rgba(59, 130, 246, 0.28)",
+        seriesFillBottom: "rgba(59, 130, 246, 0)",
+        failed: "#f43f5e",
+        reference: "#94a3b8",
+        grid: "#334155",
+        text: "#94a3b8",
+        surface: "#1e293b"
+      };
       var VISIBLE_SECONDS = 60;
-      var CHART_PADDING_LEFT = 50;
-      var CHART_PADDING_RIGHT = 15;
-      var CHART_PADDING_TOP = 15;
-      var CHART_PADDING_BOTTOM = 30;
+      var CHART_PADDING = { left: 40, right: 8, top: 16, bottom: 26 };
 
       function joinServerUrl(server, path) {
         if (!server) return path;
@@ -476,16 +1153,17 @@
         serverDiscoveryPending = false;
         I("server").innerHTML = "";
         if (SPEEDTEST_SERVERS.length === 0) {
-          I("serverArea").style.display = "none";
+          I("serverArea").hidden = true;
           localServerReady = true;
           updateStartButtonState();
         } else {
-          I("serverArea").style.display = "";
+          I("serverArea").hidden = false;
           serverDiscoveryPending = true;
           I("server").disabled = true;
           var pendingOpt = document.createElement("option");
           pendingOpt.value = "";
-          pendingOpt.textContent = "Finding best server...";
+          pendingOpt.setAttribute("data-i18n", "server.findingBest");
+          pendingOpt.textContent = I18N.t("server.findingBest");
           I("server").appendChild(pendingOpt);
           updateStartButtonState();
           // ping servers to find best one
@@ -554,9 +1232,9 @@
 
         var startBtn = I("startBtn");
         var canStart = canStartTest();
-        startBtn.className = canStart ? "" : serverDiscoveryPending ? "disabled finding" : "disabled";
-        startBtn.setAttribute("aria-disabled", canStart ? "false" : "true");
-        startBtn.title = canStart ? "" : serverDiscoveryPending ? "Finding best server..." : "No reachable local server found";
+        startBtn.classList.remove("running");
+        startBtn.disabled = !canStart;
+        startBtn.textContent = I18N.t(canStart ? "btn.start" : serverDiscoveryPending ? "stab.findingServer" : "btn.noServer");
         I("server").disabled = !localServerReady || serverDiscoveryPending;
       }
 
@@ -580,7 +1258,11 @@
         resetUI();
 
         running = true;
-        I("startBtn").className = "running";
+        setIdleVerdict("stab.measuring", "stab.measuringText");
+        var startBtn = I("startBtn");
+        startBtn.classList.add("running");
+        startBtn.disabled = false;
+        startBtn.textContent = I18N.t("btn.stop");
         I("durationSelect").disabled = true;
         I("targetSelect").disabled = true;
         I("server").disabled = true;
@@ -610,6 +1292,7 @@
               allPingData.push(data.pingData[i]);
             }
           }
+          I("downloadCsvBtn").disabled = allPingData.length === 0;
 
           // check alert threshold
           if (alertThresholdMs > 0 && data.currentPing > alertThresholdMs) {
@@ -619,6 +1302,7 @@
           if (data.testState >= 4) {
             stopTest();
           }
+          dirty = true;
         };
         updater = setInterval(function () {
           if (worker) worker.postMessage("status");
@@ -628,7 +1312,7 @@
 
       function stopTest() {
         running = false;
-        I("startBtn").className = "";
+        if (allPingData.length === 0) setIdleVerdict("status.stopped", "stab.stoppedText");
         I("durationSelect").disabled = false;
         I("targetSelect").disabled = false;
         I("server").disabled = false;
@@ -660,28 +1344,22 @@
         allPingData = [];
         latestData = null;
         resetUI();
-        drawChart();
+        dirty = true;
       }
 
       function resetUI() {
-        I("statCurrent").textContent = "";
-        I("statAvg").textContent = "";
-        I("statMin").textContent = "";
-        I("statMax").textContent = "";
-        I("statJitter").textContent = "";
-        I("statLoss").textContent = "";
-        I("statElapsed").textContent = "";
-        I("rating").textContent = "--";
-        I("rating").className = "none";
+        var stats = ["statCurrent", "statAvg", "statJitter", "statMin", "statMax", "statLoss", "statSamples"];
+        for (var i = 0; i < stats.length; i++) setStat(stats[i], "--");
+        setIdleVerdict("status.ready", "stab.readyText");
+        I("downloadCsvBtn").disabled = true;
+        setProgress(0, 0, parseInt(I("durationSelect").value));
       }
 
       // Format helpers
       function fmt(v) {
         v = Number(v);
         if (isNaN(v) || v <= 0) return "--";
-        if (v < 10) return v.toFixed(2);
-        if (v < 100) return v.toFixed(1);
-        return v.toFixed(0);
+        return I18N.num(v, v < 10 ? 2 : v < 100 ? 1 : 0);
       }
 
       function fmtTime(sec) {
@@ -699,66 +1377,106 @@
         return { text: "Bad", cls: "bad" };
       }
 
-      // UI update loop
+      // verdict box style for each rating; the title always names the rating, so it never relies on color alone
+      var VERDICT_STYLES = { great: "ok", good: "ok", poor: "warn", bad: "bad" };
+
+      function setVerdict(cls, title, text) {
+        I("verdict").className = "verdict " + cls;
+        I("verdictTitle").textContent = title;
+        I("verdictText").textContent = text;
+      }
+
+      // the idle message as translation keys, so it can be redone when the language changes
+      var idleVerdict = null;
+
+      function setIdleVerdict(titleKey, textKey) {
+        idleVerdict = [titleKey, textKey];
+        setVerdict("idle", I18N.t(titleKey), I18N.t(textKey));
+      }
+
+      function showVerdict(d) {
+        if (d.totalSamples === 0) {
+          if (running) setIdleVerdict("stab.measuring", "stab.measuringText");
+          return;
+        }
+        idleVerdict = null;
+        var r = getRating(d.avgPing, d.jitter, d.packetLoss);
+        var title, text;
+        if (r.cls === "none") {
+          // every request so far has failed
+          r = { text: "Bad", cls: "bad" };
+          title = I18N.t("stab.noResponses");
+          text = I18N.t("stab.noResponsesText");
+        } else {
+          title = I18N.t("stab.rating." + r.cls);
+          text = I18N.t("stab.summary", { avg: fmt(d.avgPing), jitter: fmt(d.jitter), loss: I18N.num(d.packetLoss, 1) });
+        }
+        setVerdict(VERDICT_STYLES[r.cls], title, text);
+      }
+
+      // units are hidden until there is a value to go with them
+      function setStat(id, text) {
+        var el = I(id);
+        el.textContent = text;
+        el.parentNode.classList.toggle("empty", text === "--");
+      }
+
+      function setProgress(fraction, elapsed, duration) {
+        var pct = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
+        I("progressBar").style.width = pct + "%";
+        I("progressTrack").setAttribute("aria-valuenow", pct);
+        I("elapsedText").textContent = fmtTime(elapsed);
+        I("durationText").textContent = fmtTime(duration);
+      }
+
       function updateUI() {
         if (!latestData) return;
         var d = latestData;
-        I("statCurrent").textContent = fmt(d.currentPing);
-        I("statAvg").textContent = fmt(d.avgPing);
-        I("statMin").textContent = d.minPing > 0 ? fmt(d.minPing) : "--";
-        I("statMax").textContent = fmt(d.maxPing);
-        I("statJitter").textContent = fmt(d.jitter);
-        I("statLoss").textContent = d.totalSamples > 0 ? d.packetLoss.toFixed(1) : "--";
-        I("statElapsed").textContent = fmtTime(d.elapsed);
-
-        var r = getRating(d.avgPing, d.jitter, d.packetLoss);
-        I("rating").textContent = r.text;
-        I("rating").className = r.cls;
+        setStat("statCurrent", fmt(d.currentPing));
+        setStat("statAvg", fmt(d.avgPing));
+        setStat("statMin", d.minPing > 0 ? fmt(d.minPing) : "--");
+        setStat("statMax", fmt(d.maxPing));
+        setStat("statJitter", fmt(d.jitter));
+        setStat("statLoss", d.totalSamples > 0 ? I18N.num(d.packetLoss, 1) : "--");
+        setStat("statSamples", d.totalSamples > 0 ? String(d.totalSamples) : "--");
+        setProgress(d.progress, d.elapsed, d.duration);
+        showVerdict(d);
       }
 
-      // Canvas chart rendering
+      // Canvas chart rendering, drawn in CSS pixels
       function drawChart() {
         var canvas = I("pingChart");
         var ctx = canvas.getContext("2d");
         var dp = window.devicePixelRatio || 1;
-        var cw = canvas.clientWidth * dp;
-        var ch = canvas.clientHeight * dp;
-        if (canvas.width !== cw || canvas.height !== ch) {
-          canvas.width = cw;
-          canvas.height = ch;
+        var w = canvas.clientWidth;
+        var h = canvas.clientHeight;
+        if (canvas.width !== Math.round(w * dp) || canvas.height !== Math.round(h * dp)) {
+          canvas.width = Math.round(w * dp);
+          canvas.height = Math.round(h * dp);
         }
-        ctx.clearRect(0, 0, cw, ch);
+        ctx.setTransform(dp, 0, 0, dp, 0, 0);
+        ctx.clearRect(0, 0, w, h);
 
-        var padL = CHART_PADDING_LEFT * dp;
-        var padR = CHART_PADDING_RIGHT * dp;
-        var padT = CHART_PADDING_TOP * dp;
-        var padB = CHART_PADDING_BOTTOM * dp;
-        var plotW = cw - padL - padR;
-        var plotH = ch - padT - padB;
-
-        // colors based on theme
-        var lineColor = isDark ? "#9090FF" : "#6060AA";
-        var fillColor = isDark ? "rgba(144,144,255,0.15)" : "rgba(96,96,170,0.15)";
-        var gridColor = isDark ? "#404040" : "#E0E0E0";
-        var textColor = isDark ? "#A0A0A0" : "#808080";
-        var lostColor = "#e74c3c";
-        var thresholdColor = "rgba(231,76,60,0.6)";
+        var padL = CHART_PADDING.left;
+        var padT = CHART_PADDING.top;
+        var plotW = w - padL - CHART_PADDING.right;
+        var plotH = h - padT - CHART_PADDING.bottom;
+        var baseY = padT + plotH;
 
         // determine visible time window
         var data = allPingData;
-        var maxTime = 0;
-        if (data.length > 0) maxTime = data[data.length - 1].t;
+        var maxTime = data.length > 0 ? data[data.length - 1].t : 0;
         var timeStart, timeEnd;
         if (maxTime <= VISIBLE_SECONDS) {
           timeStart = 0;
-          timeEnd = Math.max(VISIBLE_SECONDS, maxTime);
+          timeEnd = VISIBLE_SECONDS;
         } else {
           timeEnd = maxTime;
           timeStart = maxTime - VISIBLE_SECONDS;
         }
+        var timeSpan = timeEnd - timeStart;
 
         // binary search to find first visible data point
-        var visStart = 0;
         var lo = 0,
           hi = data.length - 1;
         while (lo <= hi) {
@@ -766,127 +1484,120 @@
           if (data[mid].t < timeStart) lo = mid + 1;
           else hi = mid - 1;
         }
-        visStart = lo;
+        var visible = data.slice(lo);
 
-        // determine Y-axis scale from visible data only
+        // Y-axis scale from visible data, kept tall enough to show the alert threshold
         var yMax = 50; // minimum 50ms scale
-        for (var i = visStart; i < data.length && data[i].t <= timeEnd; i++) {
-          if (!data[i].lost && data[i].ping > yMax) yMax = data[i].ping;
+        for (var i = 0; i < visible.length; i++) {
+          if (!visible[i].lost && visible[i].ping > yMax) yMax = visible[i].ping;
         }
+        if (alertThresholdMs > yMax) yMax = alertThresholdMs;
         yMax = Math.ceil((yMax * 1.2) / 10) * 10; // round up to nearest 10 with 20% headroom
 
-        var fontSize = 11 * dp;
-        ctx.font = fontSize + "px sans-serif";
-        ctx.textBaseline = "middle";
+        function xFor(t) {
+          return padL + ((t - timeStart) / timeSpan) * plotW;
+        }
+        function yFor(v) {
+          return baseY - (v / yMax) * plotH;
+        }
 
-        // grid lines - horizontal
-        var ySteps = getYSteps(yMax);
-        ctx.strokeStyle = gridColor;
-        ctx.lineWidth = dp;
-        ctx.fillStyle = textColor;
+        ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+        ctx.lineWidth = 1;
+
+        // horizontal grid lines with value labels
+        var ySteps = [0].concat(getYSteps(yMax));
         ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
         for (var s = 0; s < ySteps.length; s++) {
-          var yVal = ySteps[s];
-          if (yVal > yMax) continue;
-          var y = padT + plotH - (yVal / yMax) * plotH;
+          if (ySteps[s] > yMax) continue;
+          var y = Math.round(yFor(ySteps[s])) + 0.5;
+          ctx.strokeStyle = CHART_COLORS.grid;
           ctx.beginPath();
           ctx.moveTo(padL, y);
           ctx.lineTo(padL + plotW, y);
           ctx.stroke();
-          ctx.fillText(yVal + "", padL - 5 * dp, y);
+          ctx.fillStyle = CHART_COLORS.text;
+          ctx.fillText(String(ySteps[s]), padL - 8, y);
         }
 
-        // grid lines - vertical (time ticks)
+        // time labels, kept inside the canvas at both ends
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        var timeSpan = timeEnd - timeStart;
-        var tickInterval = timeSpan <= 60 ? 10 : timeSpan <= 120 ? 15 : 30;
-        var firstTick = Math.ceil(timeStart / tickInterval) * tickInterval;
-        for (var t = firstTick; t <= timeEnd; t += tickInterval) {
-          var x = padL + ((t - timeStart) / timeSpan) * plotW;
-          ctx.beginPath();
-          ctx.strokeStyle = gridColor;
-          ctx.moveTo(x, padT);
-          ctx.lineTo(x, padT + plotH);
-          ctx.stroke();
-          ctx.fillStyle = textColor;
-          ctx.fillText(fmtTime(t), x, padT + plotH + 4 * dp);
+        // pick the smallest interval whose labels fit without colliding
+        var maxLabels = Math.floor(plotW / (ctx.measureText("00:00").width + 24)) + 1;
+        var intervals = [10, 15, 20, 30, 60];
+        var tickInterval = intervals[intervals.length - 1];
+        for (var k = 0; k < intervals.length; k++) {
+          if (timeSpan / intervals[k] + 1 <= maxLabels) {
+            tickInterval = intervals[k];
+            break;
+          }
+        }
+        for (var t = Math.ceil(timeStart / tickInterval) * tickInterval; t <= timeEnd; t += tickInterval) {
+          var label = fmtTime(t);
+          var half = ctx.measureText(label).width / 2;
+          var lx = Math.min(Math.max(xFor(t), padL + half), padL + plotW - half);
+          ctx.fillText(label, lx, baseY + 8);
         }
 
-        // axis labels
-        ctx.fillStyle = textColor;
-        ctx.textAlign = "right";
-        ctx.textBaseline = "top";
-        ctx.fillText("ms", padL - 5 * dp, padT - 2 * dp);
-
-        // plot border
-        ctx.strokeStyle = gridColor;
-        ctx.lineWidth = dp;
-        ctx.strokeRect(padL, padT, plotW, plotH);
-
-        // alert threshold line
-        if (alertThresholdMs > 0 && alertThresholdMs <= yMax) {
-          var threshY = padT + plotH - (alertThresholdMs / yMax) * plotH;
+        // alert threshold reference line
+        if (alertThresholdMs > 0) {
+          var threshY = Math.round(yFor(alertThresholdMs)) + 0.5;
           ctx.save();
-          ctx.setLineDash([6 * dp, 4 * dp]);
-          ctx.strokeStyle = thresholdColor;
-          ctx.lineWidth = 1.5 * dp;
+          ctx.setLineDash([6, 4]);
+          ctx.strokeStyle = CHART_COLORS.reference;
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.moveTo(padL, threshY);
           ctx.lineTo(padL + plotW, threshY);
           ctx.stroke();
           ctx.restore();
+          ctx.fillStyle = CHART_COLORS.text;
+          ctx.textAlign = "right";
+          ctx.textBaseline = "bottom";
+          ctx.fillText(alertThresholdMs + " " + I18N.t("unit.ms"), padL + plotW, threshY - 4);
         }
 
-        if (data.length < 2) return;
-
-        // filter visible data (using binary search start index)
-        var visible = [];
-        for (var i = visStart; i < data.length && data[i].t <= timeEnd; i++) {
-          visible.push(data[i]);
+        var tooltip = I("chartTooltip");
+        if (visible.length === 0) {
+          tooltip.hidden = true;
+          return;
         }
-        if (visible.length < 1) return;
 
-        // draw filled area
+        // area under the line
+        var gradient = ctx.createLinearGradient(0, padT, 0, baseY);
+        gradient.addColorStop(0, CHART_COLORS.seriesFillTop);
+        gradient.addColorStop(1, CHART_COLORS.seriesFillBottom);
         ctx.beginPath();
-        var started = false;
+        var firstX = null,
+          lastX = null;
         for (var i = 0; i < visible.length; i++) {
           if (visible[i].lost) continue;
-          var px = padL + ((visible[i].t - timeStart) / timeSpan) * plotW;
-          var py = padT + plotH - (visible[i].ping / yMax) * plotH;
-          if (!started) {
-            ctx.moveTo(px, padT + plotH);
-            ctx.lineTo(px, py);
-            started = true;
-          } else {
-            ctx.lineTo(px, py);
+          var px = xFor(visible[i].t);
+          if (firstX === null) {
+            ctx.moveTo(px, baseY);
+            firstX = px;
           }
+          ctx.lineTo(px, yFor(visible[i].ping));
+          lastX = px;
         }
-        // close the fill path
-        if (started) {
-          // find last non-lost point
-          for (var i = visible.length - 1; i >= 0; i--) {
-            if (!visible[i].lost) {
-              var px = padL + ((visible[i].t - timeStart) / timeSpan) * plotW;
-              ctx.lineTo(px, padT + plotH);
-              break;
-            }
-          }
+        if (firstX !== null) {
+          ctx.lineTo(lastX, baseY);
           ctx.closePath();
-          ctx.fillStyle = fillColor;
+          ctx.fillStyle = gradient;
           ctx.fill();
         }
 
-        // draw line
+        // latency line, broken at failed requests
         ctx.beginPath();
-        started = false;
+        var started = false;
         for (var i = 0; i < visible.length; i++) {
           if (visible[i].lost) {
             started = false;
             continue;
           }
-          var px = padL + ((visible[i].t - timeStart) / timeSpan) * plotW;
-          var py = padT + plotH - (visible[i].ping / yMax) * plotH;
+          var px = xFor(visible[i].t);
+          var py = yFor(visible[i].ping);
           if (!started) {
             ctx.moveTo(px, py);
             started = true;
@@ -894,20 +1605,54 @@
             ctx.lineTo(px, py);
           }
         }
-        ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 2 * dp;
+        ctx.strokeStyle = CHART_COLORS.series;
+        ctx.lineWidth = 2;
         ctx.lineJoin = "round";
+        ctx.lineCap = "round";
         ctx.stroke();
 
-        // draw failed request markers
+        // failed request markers along the baseline
         for (var i = 0; i < visible.length; i++) {
-          if (!visible[i].lost) continue;
-          var px = padL + ((visible[i].t - timeStart) / timeSpan) * plotW;
-          ctx.beginPath();
-          ctx.arc(px, padT + plotH - 10 * dp, 3 * dp, 0, Math.PI * 2);
-          ctx.fillStyle = lostColor;
-          ctx.fill();
+          if (visible[i].lost) drawMarker(ctx, xFor(visible[i].t), baseY - 6, CHART_COLORS.failed);
         }
+
+        // hover crosshair and tooltip on the nearest sample
+        if (hoverX === null) {
+          tooltip.hidden = true;
+          return;
+        }
+        var hoverT = timeStart + ((hoverX - padL) / plotW) * timeSpan;
+        var nearest = visible[0];
+        for (var i = 1; i < visible.length; i++) {
+          if (Math.abs(visible[i].t - hoverT) < Math.abs(nearest.t - hoverT)) nearest = visible[i];
+        }
+        var nx = xFor(nearest.t);
+        var ny = nearest.lost ? baseY - 6 : yFor(nearest.ping);
+        ctx.strokeStyle = CHART_COLORS.reference;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(Math.round(nx) + 0.5, padT);
+        ctx.lineTo(Math.round(nx) + 0.5, baseY);
+        ctx.stroke();
+        drawMarker(ctx, nx, ny, nearest.lost ? CHART_COLORS.failed : CHART_COLORS.series);
+
+        I("tooltipTime").textContent = fmtTime(nearest.t);
+        I("tooltipValue").textContent = nearest.lost ? I18N.t("stab.tooltipFailed") : fmt(nearest.ping) + " " + I18N.t("unit.ms");
+        tooltip.hidden = false;
+        var half = tooltip.offsetWidth / 2;
+        tooltip.style.left = Math.min(Math.max(nx, half), w - half) + "px";
+        tooltip.style.top = Math.max(ny, tooltip.offsetHeight + 12) + "px";
+      }
+
+      // 8px marker with a surface-colored ring so it stays readable on top of the line
+      function drawMarker(ctx, x, y, color) {
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = CHART_COLORS.surface;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
 
       function getYSteps(yMax) {
@@ -923,26 +1668,22 @@
         return steps;
       }
 
-      // Animation frame loop
-      window.requestAnimationFrame =
-        window.requestAnimationFrame ||
-        window.webkitRequestAnimationFrame ||
-        window.mozRequestAnimationFrame ||
-        window.msRequestAnimationFrame ||
-        function (callback) {
-          setTimeout(callback, 1000 / 60);
-        };
+      // redraw only when something changed
       function frame() {
+        if (dirty) {
+          dirty = false;
+          updateUI();
+          drawChart();
+        }
         requestAnimationFrame(frame);
-        updateUI();
-        drawChart();
       }
-      frame();
 
       // Alert threshold
       function updateThreshold(val) {
         alertThresholdMs = parseInt(val);
-        I("thresholdValue").textContent = alertThresholdMs > 0 ? alertThresholdMs + " ms" : "Off";
+        I("thresholdValue").textContent = alertThresholdMs > 0 ? alertThresholdMs + " " + I18N.t("unit.ms") : I18N.t("stab.thresholdOff");
+        I("thresholdKey").hidden = alertThresholdMs === 0;
+        dirty = true;
       }
 
       function playBeep() {
@@ -981,10 +1722,64 @@
         URL.revokeObjectURL(url);
       }
 
+      // Event wiring
+      I("startBtn").addEventListener("click", startStop);
+      I("resetBtn").addEventListener("click", resetTest);
+      I("downloadCsvBtn").addEventListener("click", downloadCsv);
+      I("targetSelect").addEventListener("change", updateStartButtonState);
+      I("server").addEventListener("change", function () {
+        onServerChange(this.value);
+      });
+      I("durationSelect").addEventListener("change", function () {
+        if (!latestData) setProgress(0, 0, parseInt(this.value));
+      });
+      I("alertThreshold").addEventListener("input", function () {
+        updateThreshold(this.value);
+      });
+      function trackPointer(e) {
+        var x = e.clientX - this.getBoundingClientRect().left;
+        hoverX = x >= CHART_PADDING.left && x <= this.clientWidth - CHART_PADDING.right ? x : null;
+        dirty = true;
+      }
+      I("pingChart").addEventListener("pointermove", trackPointer);
+      I("pingChart").addEventListener("pointerdown", trackPointer);
+      I("pingChart").addEventListener("pointerleave", function (e) {
+        // on touch screens, keep the tooltip after the finger lifts
+        if (e.pointerType !== "mouse") return;
+        hoverX = null;
+        dirty = true;
+      });
+      document.addEventListener("pointerdown", function (e) {
+        if (hoverX !== null && e.target !== I("pingChart")) {
+          hoverX = null;
+          dirty = true;
+        }
+      });
+      // the chart's height follows the window in the wide layout, so watch the canvas itself
+      if (window.ResizeObserver) {
+        new ResizeObserver(function () {
+          dirty = true;
+        }).observe(I("pingChart"));
+      } else {
+        window.addEventListener("resize", function () {
+          dirty = true;
+        });
+      }
+
+      // redo the text this script set when the language changes
+      I18N.onChange(function () {
+        if (running) I("startBtn").textContent = I18N.t("btn.stop");
+        else updateStartButtonState();
+        updateThreshold(I("alertThreshold").value);
+        if (idleVerdict) setIdleVerdict(idleVerdict[0], idleVerdict[1]);
+        else if (latestData) showVerdict(latestData);
+      });
+
       // Init — load server list first (async), then initialize UI
+      resetUI();
+      frame();
       loadServers(function () {
         initServers();
-        drawChart();
       });
     </script>
   </body>
