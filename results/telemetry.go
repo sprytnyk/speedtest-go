@@ -82,6 +82,8 @@ type IPInfoResponse struct {
 }
 
 func Initialize(c *config.Config) {
+	initStatsSession(c)
+
 	// changed to use Noto Sans instead of OpenSans, due to issue:
 	// https://github.com/golang/freetype/issues/8
 	fLight, err := freetype.ParseFont(fontLightBytes)

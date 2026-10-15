@@ -1,6 +1,7 @@
 package results
 
 import (
+	"crypto/subtle"
 	"html/template"
 	"net/http"
 
@@ -23,12 +24,13 @@ type StatsData struct {
 var (
 	key   = []byte(securecookie.GenerateRandomKey(32))
 	store = sessions.NewCookieStore(key)
-	conf  = config.LoadedConfig()
 )
 
-func init() {
+// initStatsSession configures the stats session cookie. It must run after the
+// config is loaded, since the cookie path depends on url_base.
+func initStatsSession(c *config.Config) {
 	store.Options = &sessions.Options{
-		Path:     conf.BaseURL + "/stats",
+		Path:     c.BaseURL + "/stats",
 		MaxAge:   3600 * 1, // 1 hour
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
@@ -36,6 +38,7 @@ func init() {
 }
 
 func Stats(w http.ResponseWriter, r *http.Request) {
+	conf := config.LoadedConfig()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	t, err := template.New("template").Parse(htmlTemplate)
 	if err != nil {
@@ -66,6 +69,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 				session.Options.MaxAge = -1
 				session.Save(r, w)
 				http.Redirect(w, r, conf.BaseURL+"/stats", http.StatusTemporaryRedirect)
+				return
 			} else {
 				data.LoggedIn = true
 
@@ -81,7 +85,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 					data.Data = stats
 				case "":
 				default:
-					stat, err := database.DB.FetchByUUID(id)
+					stat, err := database.DB.FetchByUUID(ResolveID(id))
 					if err != nil {
 						log.Errorf("Error fetching data from database: %s", err)
 						w.WriteHeader(http.StatusInternalServerError)
@@ -94,10 +98,11 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 			if op == "login" {
 				session, _ := store.Get(r, "logged")
 				password := r.FormValue("password")
-				if password == conf.StatsPassword {
+				if subtle.ConstantTimeCompare([]byte(password), []byte(conf.StatsPassword)) == 1 {
 					session.Values["authenticated"] = true
 					session.Save(r, w)
 					http.Redirect(w, r, conf.BaseURL+"/stats", http.StatusTemporaryRedirect)
+					return
 				} else {
 					w.WriteHeader(http.StatusForbidden)
 				}
