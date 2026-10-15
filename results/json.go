@@ -72,8 +72,7 @@ func JSONResult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uuid := ResolveID(rawID)
-	record, err := database.DB.FetchByUUID(uuid)
+	record, err := database.DB.FetchByUUID(rawID)
 	if err != nil {
 		log.Errorf("Error querying database for JSON result: %s", err)
 		w.WriteHeader(http.StatusNotFound)

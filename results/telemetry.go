@@ -100,12 +100,7 @@ func Record(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseID := uuid.String()
-	if conf.EnableIDObfuscation {
-		responseID = ObfuscateULID(uuid.String())
-	}
-
-	if _, err := w.Write([]byte("id " + responseID)); err != nil {
+	if _, err := w.Write([]byte("id " + record.UUID)); err != nil {
 		log.Errorf("Error writing ID to telemetry request: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}

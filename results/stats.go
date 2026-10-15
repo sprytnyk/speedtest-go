@@ -55,7 +55,6 @@ type StatsEntry struct {
 	schema.TelemetryData
 	Time         string // RFC 3339, reformatted in the viewer's language by the page
 	TimeText     string
-	PublicID     string // the ID users see when ID obfuscation is on
 	ISP          string
 	Location     string
 	Lookup       string // the ISP lookup summary, "IP - ISP, Country"
@@ -167,24 +166,24 @@ func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, d
 			return http.StatusInternalServerError, false
 		}
 		for _, stat := range stats {
-			data.Data = append(data.Data, newStatsEntry(stat, conf))
+			data.Data = append(data.Data, newStatsEntry(stat))
 		}
 		return http.StatusOK, false
 	}
 
 	data.Query = id
-	stat, err := database.DB.FetchByUUID(ResolveID(id))
+	stat, err := database.DB.FetchByUUID(id)
 	if err != nil {
 		log.Errorf("Error fetching data from database: %s", err)
 		data.NotFound = true
 		return http.StatusNotFound, false
 	}
 	data.Single = true
-	data.Data = append(data.Data, newStatsEntry(*stat, conf))
+	data.Data = append(data.Data, newStatsEntry(*stat))
 	return http.StatusOK, false
 }
 
-func newStatsEntry(t schema.TelemetryData, conf *config.Config) StatsEntry {
+func newStatsEntry(t schema.TelemetryData) StatsEntry {
 	e := StatsEntry{
 		TelemetryData: t,
 		Time:          t.Timestamp.Format(time.RFC3339),
@@ -195,9 +194,6 @@ func newStatsEntry(t schema.TelemetryData, conf *config.Config) StatsEntry {
 		UploadText:    statValue(t.Upload),
 		PingText:      statValue(t.Ping),
 		JitterText:    statValue(t.Jitter),
-	}
-	if conf.EnableIDObfuscation {
-		e.PublicID = ObfuscateULID(t.UUID)
 	}
 
 	e.Extra, e.ExtraText = readableFields(t.Extra)

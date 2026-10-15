@@ -35,7 +35,7 @@ This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedt
 * Multiple test servers to choose from
 * English and Ukrainian, picked from the browser's language or a switch on every page
 * Layouts for desktop and phone
-* Optional ID obfuscation and IP redaction for stored results
+* Optional IP redaction for stored results
 * Supports the [PROXY protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt)
 * Answers the PHP backend's endpoints too (`.php` suffixes and the `/backend/` prefix)
 
@@ -111,7 +111,6 @@ also be set with an environment variable named `SPEEDTEST_` plus the key in capi
 | `database_hostname`, `database_port`, `database_name`, `database_username`, `database_password` | Connection settings for MySQL, PostgreSQL and MSSQL. `database_port` is only used by MSSQL. |
 | `statistics_password` | Password of the statistics page. The page stays locked while it is `PASSWORD` or empty. |
 | `redact_ip_addresses` | Store results without the client's IP address and hostname. |
-| `enable_id_obfuscation` | Hand out obfuscated test IDs instead of the stored ones. |
 | `enable_tls`, `enable_http2`, `tls_cert_file`, `tls_key_file` | Serve HTTPS directly. HTTP/2 needs TLS. |
 
 ### Multiple servers
@@ -208,8 +207,8 @@ in the top bar changes it. The page texts live in `web/assets/javascript/i18n.js
 
 ## Differences from the PHP backend
 
-* Test IDs are [ULIDs](https://github.com/ulid/spec) instead of auto-increment numbers. With
-  `enable_id_obfuscation`, they are obfuscated with a salt kept in `idObfuscation_salt.bin`.
+* Test IDs are random [ULIDs](https://github.com/ulid/spec) instead of auto-increment numbers, so they cannot be
+  guessed, and `enable_id_obfuscation` is not needed and not supported.
 * The ISP is looked up with an API (see above) instead of ipinfo.io or an offline GeoIP database, so no API key or
   `.mmdb` file is needed.
 * The distance between client and server is not calculated, so `server_lat`, `server_lng`, `ipinfo_api_key` and

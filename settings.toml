@@ -18,8 +18,6 @@ ip_lookup_url="https://ip.sprytnyk.dev/api/ip/{ip}/"
 statistics_password="PASSWORD"
 # redact IP addresses
 redact_ip_addresses=false
-# obfuscate test IDs returned to clients
-enable_id_obfuscation=false
 
 # database type for statistics data, currently supports: none, memory, bolt, mysql, postgresql, sqlite, mssql
 # if none is specified, no telemetry/stats will be recorded, and no result PNG will be generated

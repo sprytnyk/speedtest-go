@@ -15,9 +15,8 @@ type Config struct {
 	BaseURL           string `mapstructure:"url_base"`
 	ProxyProtocolPort string `mapstructure:"proxyprotocol_port"`
 
-	StatsPassword       string `mapstructure:"statistics_password"`
-	RedactIP            bool   `mapstructure:"redact_ip_addresses"`
-	EnableIDObfuscation bool   `mapstructure:"enable_id_obfuscation"`
+	StatsPassword string `mapstructure:"statistics_password"`
+	RedactIP      bool   `mapstructure:"redact_ip_addresses"`
 
 	AssetsPath string `mapstructure:"assets_path"`
 
@@ -59,7 +58,6 @@ func init() {
 	viper.SetDefault("proxyprotocol_port", "0")
 	viper.SetDefault("statistics_password", "PASSWORD")
 	viper.SetDefault("redact_ip_addresses", false)
-	viper.SetDefault("enable_id_obfuscation", false)
 	viper.SetDefault("assets_path", "")
 	viper.SetDefault("ip_lookup_url", DefaultIPLookupURL)
 	viper.SetDefault("database_type", "postgresql")
@@ -95,6 +93,12 @@ func Load(configPath string) Config {
 
 	if err := viper.Unmarshal(&conf); err != nil {
 		log.Fatalf("Error parsing config: %s", err)
+	}
+
+	// ID obfuscation was removed: test IDs are random, so it only hid part of
+	// the test's time, which the JSON result shows anyway
+	if viper.GetBool("enable_id_obfuscation") {
+		log.Warnf("enable_id_obfuscation is no longer supported and is ignored; test IDs are not obfuscated")
 	}
 
 	if conf.IPLookupURL != "" {

@@ -105,7 +105,7 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uuid := ResolveID(r.FormValue("id"))
+	uuid := r.FormValue("id")
 	record, err := database.DB.FetchByUUID(uuid)
 	if err != nil {
 		log.Errorf("Error querying database: %s", err)
