@@ -47,11 +47,12 @@ func (p *MySQL) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 
 func (p *MySQL) FetchLast100() ([]schema.TelemetryData, error) {
 	var records []schema.TelemetryData
-	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY "timestamp" DESC LIMIT 100;`)
+	rows, err := p.db.Query("SELECT * FROM speedtest_users ORDER BY `timestamp` DESC LIMIT 100;")
 	if err != nil {
 		return nil, err
 	}
 	if rows != nil {
+		defer rows.Close()
 		var id string
 
 		for rows.Next() {
@@ -62,5 +63,5 @@ func (p *MySQL) FetchLast100() ([]schema.TelemetryData, error) {
 			records = append(records, record)
 		}
 	}
-	return records, nil
+	return records, rows.Err()
 }
