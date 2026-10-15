@@ -1,164 +1,217 @@
-![LibreSpeed Logo](https://github.com/librespeed/speedtest-go/blob/master/.logo/logo3.png?raw=true)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".logo/logo2.png">
+  <img alt="LibreSpeed" src=".logo/logo3.png" width="360">
+</picture>
 
 # LibreSpeed
 
 No Flash, No Java, No WebSocket, No Bullshit.
 
-This is a very lightweight speed test implemented in JavaScript, using XMLHttpRequest and Web Workers.
+A self-hosted speed test in a single Go binary. The browser measures download, upload, ping and jitter with
+XMLHttpRequest and Web Workers, and the web UI is built into the binary, so there is nothing else to install.
 
-## Try it
-[Take a speed test](https://speedtest.zzz.cat)
+This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedtest-go).
 
-## Compatibility
-All modern browsers are supported: IE11, latest Edge, latest Chrome, latest Firefox, latest Safari.
-Works with mobile versions too.
+![Speed test](docs/screenshots/speedtest.png)
+
+| Stability test | Statistics |
+| --- | --- |
+| ![Stability test](docs/screenshots/stability.png) | ![Statistics, latest tests](docs/screenshots/stats-list.png) |
+
+<details>
+<summary>A single test on the statistics page</summary>
+
+![Statistics, one test](docs/screenshots/stats-detail.png)
+
+</details>
 
 ## Features
-* Download
-* Upload
-* Ping
-* Jitter
-* IP Address, ISP and country
-* Telemetry (optional)
-* Results sharing via PNG image and JSON API (optional)
-* Multiple Points of Test (optional)
-* Compatible with PHP frontend predefined endpoints (with `.php` suffixes)
-* Supports [Proxy Protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt)
-* Modern and classic UI designs with switchable interface
-* ID obfuscation for test result privacy (optional)
-* Connection stability test (`stability.html`) with latency charting, loss tracking, threshold alerts and CSV export
 
-### IP Detection
-* Client IP detection with proxy header chain support (X-Forwarded-For, X-Real-IP, Client-IP, CF-Connecting-IPv6)
-* ISP and country detection via the [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json) API
-* Private/special IP detection (including ULA IPv6 and CGNAT)
+* Download and upload speed, ping and jitter, with a live speed chart
+* IP address, ISP and country of the client
+* Connection stability test (`/stability.html`): latency over time, jitter, failed requests, an alert threshold and
+  CSV export
+* Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
+* Multiple test servers to choose from
+* English and Ukrainian, picked from the browser's language or a switch on every page
+* Layouts for desktop and phone
+* Optional ID obfuscation and IP redaction for stored results
+* Supports the [PROXY protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt)
+* Answers the PHP backend's endpoints too (`.php` suffixes and the `/backend/` prefix)
 
-### Privacy
-ISP lookups use the [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json) API without any kind of tracking:
-only the client's IP address is sent, no API key, cookies or other identifiers are involved, and private/special
-IPs are never sent at all.
-
-The lookup is enabled by default: the bundled UI and [speedtest-cli](https://github.com/librespeed/speedtest-cli)
-always request ISP info. To disable it in the web UI, set `getIp_ispInfo: false` in the speedtest settings.
-
-![Screencast](https://speedtest.zzz.cat/speedtest.webp)
-
-## Server requirements
-* Any [Go supported platforms](https://github.com/golang/go/wiki/MinimumRequirements) (Go 1.21+)
-* SQLite, BoltDB, PostgreSQL, MySQL or MSSQL database to store test results (optional)
-* No external dependencies — single binary deployment
-* A fast! Internet connection
+The pages work in current versions of Firefox, Chrome, Edge and Safari, on desktop and mobile.
 
 ## Installation
 
-### Install using prebuilt binaries
+### Prebuilt binaries
 
-1. Download the appropriate binary file from the [releases](https://github.com/sprytnyk/speedtest-go/releases/) page.
-2. Unzip the archive.
-3. Make changes to the configuration.
-4. Run the binary.
-5. Optional: Setup a systemd service file.
+1. Download the archive for your platform from the [releases](https://github.com/sprytnyk/speedtest-go/releases/)
+   page and unpack it.
+2. Edit `settings.toml` (see [Configuration](#configuration)).
+3. Run `./speedtest-backend`. It reads `settings.toml` from the current directory, or the file given with
+   `-c /path/to/settings.toml`. `./speedtest-backend -version` prints the version.
 
-### Use Ansible for automatic installation
+The test is then served at `http://<host>:8989/`.
 
-You can use an Ansible role for installing speedtest-go easily. You can find the role on the [Ansible galaxy](https://galaxy.ansible.com/flymia/ansible_speedtest_go). There is a [separate repository](https://github.com/flymia/ansible-speedtest_go) for documentation about the Ansible role.
-### Compile from source
+### Docker
 
-You need Go 1.21+ to compile the binary.
+Images for `linux/amd64`, `linux/arm64`, `linux/arm/v7` and `linux/386` are published to the GitHub Container
+Registry, tagged `master` for the latest build and with the version for releases:
 
-1. Clone this repository:
+```
+docker run -d -p 8989:8989 ghcr.io/sprytnyk/speedtest-go:master
+```
 
+The image contains the repository's `settings.toml`, which keeps results in memory. Change settings with
+environment variables (e.g. `-e SPEEDTEST_DATABASE_TYPE=sqlite -e SPEEDTEST_DATABASE_FILE=/data/speedtest.db
+-v speedtest-data:/data`), or mount your own file over `/app/settings.toml`.
+
+### systemd
+
+[`systemd/`](systemd/) has a hardened unit with socket activation and setup steps. Two things to know:
+
+* `MemoryDenyWriteExecute=true` works with the release binaries, but not with binaries packed with UPX, which unpack
+  themselves into executable memory.
+* With `DynamicUser=true`, a SQLite or BoltDB file needs a writable place that survives restarts. Add
+  `StateDirectory=speedtest` to the unit and set `database_file="/var/lib/speedtest/speedtest.db"`.
+
+### From source
+
+Go 1.27 or later is needed:
+
+```
+git clone https://github.com/sprytnyk/speedtest-go
+cd speedtest-go
+go build -ldflags "-w -s -X main.version=$(git describe --tags)" -trimpath -o speedtest-backend .
+```
+
+The web UI from `web/assets` is embedded in the binary, so `speedtest-backend` and `settings.toml` are all you need
+to copy to the server.
+
+## Configuration
+
+Settings are read from `settings.toml`; the file in this repository lists every key with a comment. Each key can
+also be set with an environment variable named `SPEEDTEST_` plus the key in capitals, e.g.
+`SPEEDTEST_LISTEN_PORT=8080`, which takes precedence over the file.
+
+| Key | Meaning |
+| --- | --- |
+| `bind_address`, `listen_port` | Where to listen. An empty address listens on all interfaces; the port defaults to 8989. |
+| `url_base` | Path prefix when the test is served below the site root, e.g. `/librespeed`. |
+| `proxyprotocol_port` | Extra port that expects the PROXY protocol, `0` to disable. |
+| `assets_path` | Directory with your own copy of the web UI. When empty or missing, the built-in UI is used. |
+| `ip_lookup_url` | ISP lookup API, see [ISP lookup and privacy](#isp-lookup-and-privacy). |
+| `database_type` | Where results are stored: `none`, `memory`, `bolt`, `sqlite`, `mysql`, `postgresql` or `mssql`. |
+| `database_file` | Database file for `bolt` and `sqlite`. |
+| `database_hostname`, `database_port`, `database_name`, `database_username`, `database_password` | Connection settings for MySQL, PostgreSQL and MSSQL. `database_port` is only used by MSSQL. |
+| `statistics_password` | Password of the statistics page. The page stays locked while it is `PASSWORD` or empty. |
+| `redact_ip_addresses` | Store results without the client's IP address and hostname. |
+| `enable_id_obfuscation` | Hand out obfuscated test IDs instead of the stored ones. |
+| `enable_tls`, `enable_http2`, `tls_cert_file`, `tls_key_file` | Serve HTTPS directly. HTTP/2 needs TLS. |
+
+### Multiple servers
+
+To let users choose between test servers, put a `server-list.json` into your `assets_path` directory:
+
+```json
+[
+  {
+    "name": "Kyiv, UA",
+    "server": "https://kyiv.example.com/",
+    "dlURL": "garbage",
+    "ulURL": "empty",
+    "pingURL": "empty",
+    "getIpURL": "getIP",
+    "sponsorName": "Example ISP",
+    "sponsorURL": "https://example.com/"
+  }
+]
+```
+
+The page pings every server and selects the closest. Without the file, the test runs against the server that
+serves the page.
+
+## Storing results
+
+Results are stored when the page sends them at the end of a test. That gives every test an ID, the **Share** button
+with a result image, and the statistics page. To turn it on:
+
+1. Choose a database with `database_type`. `sqlite` is the simplest: it only needs `database_file`, and creates
+   its tables itself.
+2. Set `statistics_password` to open the statistics page at `/stats`.
+3. Copy `web/assets` to a directory of your own, set `assets_path` to it, and add a `settings.json` there:
+
+    ```json
+    { "telemetry_level": "full" }
     ```
-    $ git clone https://github.com/sprytnyk/speedtest-go
-    ```
 
-2. Build
-    ```
-    # Change current working directory to the repository
-    $ cd speedtest-go
-    # Compile
-    $ go build -ldflags "-w -s" -trimpath -o speedtest main.go
-    ```
+    `basic` stores the results only; `full` also stores the test log shown on the statistics page.
+4. Put your contact address into the privacy policy in `index.html` (search for `PUT@YOUR_EMAIL.HERE`). The policy
+   is shown to users before they start a test.
 
-3. Copy the `assets` directory, `settings.toml` file along with the compiled `speedtest` binary into a single directory
+A stored test can then be read at:
 
-4. If you have telemetry enabled,
-    - For PostgreSQL/MySQL/MSSQL, create database and import the corresponding `.sql` file under `database/{postgresql,mysql,mssql}`
+* `/results/?id=<id>`: the result image, in Ukrainian with `&lang=uk`
+* `/results/json?id=<id>`: the result as JSON
+* `/stats`: the latest 100 tests, and every detail of a single test
 
-        ```
-        # assume you have already created a database named `speedtest` under current user
-        $ psql speedtest < database/postgresql/telemetry_postgresql.sql
-        ```
+### Databases
 
-    - For embedded databases (BoltDB, SQLite), make sure to define the `database_file` path in `settings.toml`:
-
-        ```
-        database_file="speedtest.db"
-        ```
-
-    - SQLite supports WAL mode for better concurrent performance and works out of the box with no additional dependencies.
-
-5. Put `assets` folder under the same directory as your compiled binary.
-    - Make sure the font files and JavaScripts are in the `assets` directory
-    - You can have multiple HTML pages under `assets` directory. They can be access directly under the server root
-    (e.g. `/example-singleServer-full.html`)
-    - It's possible to have a default page mapped to `/`, simply put a file named `index.html` under `assets`
-
-6. Change `settings.toml` according to your environment:
+* **SQLite** and **BoltDB** need nothing but the file, and SQLite runs in WAL mode.
+* For **PostgreSQL**, **MySQL** and **MSSQL**, create the database and import the schema from
+  `database/{postgresql,mysql,mssql}`, e.g. `psql speedtest < database/postgresql/telemetry_postgresql.sql`.
+* **MySQL** takes the Go driver's address format in `database_hostname`, not a bare hostname:
 
     ```toml
-    # bind address, use empty string to bind to all interfaces
-    bind_address="127.0.0.1"
-    # backend listen port, default is 8989
-    listen_port=8989
-    # proxy protocol port, use 0 to disable
-    proxyprotocol_port=0
-   
-    # assets directory path, defaults to `assets` in the same directory
-    # if the path cannot be found, embedded default assets will be used
-    assets_path="./assets"
-
-    # password for logging into statistics page, change this to enable stats page
-    statistics_password="PASSWORD"
-    # redact IP addresses
-    redact_ip_addresses=false
-
-    # database type for statistics data, currently supports: none, memory, bolt, sqlite, mysql, postgresql, mssql
-    # if none is specified, no telemetry/stats will be recorded, and no result PNG will be generated
-    database_type="postgresql"
-    database_hostname="localhost"
-    database_name="speedtest"
-    database_username="postgres"
-    database_password=""
-
-    # database port (optional, defaults to driver default; only used by mssql)
-    database_port=""
-
-    # if you use `bolt` or `sqlite` as database, set database_file to database file location
-    database_file="speedtest.db"
-
-    # TLS and HTTP/2 settings. TLS is required for HTTP/2
-    enable_tls=false
-    enable_http2=false
-
-    # if you use HTTP/2 or TLS, you need to prepare certificates and private keys
-    # tls_cert_file="cert.pem"
-    # tls_key_file="privkey.pem"
+    database_hostname="tcp(db.example.com:3306)"        # TCP, port is required
+    database_hostname="unix(/run/mysqld/mysqld.sock)"   # Unix socket
+    database_hostname=""                                # TCP to 127.0.0.1:3306
     ```
 
-## Differences between Go and PHP implementation and caveats
+    A bare value such as `localhost` fails at startup with `default addr for network 'localhost' unknown`.
 
-- Test IDs are generated as ULID (Universally Unique Lexicographically Sortable Identifier), unlike the PHP version's auto-increment integer IDs
-- ID obfuscation is available as an optional feature — when enabled, ULIDs are obfuscated with a per-instance salt
-- The Go version ships with two built-in UI designs (classic gauges and modern CSS), switchable via `?design=new` URL parameter
-- The modern design (`index-modern.html`) supports multi-server configuration via `server-list.json` placed alongside the binary;
-without it, the test runs against the local server
-- ISP and country are looked up via the [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json) API instead of
-ipinfo.io or an offline GeoIP database, so no API key or `.mmdb` file is needed
-- Distance between the client and the server is not calculated, so the `server_lat`, `server_lng`,
-`ipinfo_api_key` and `geoip_database_file` settings are no longer used
+* Results are looked up by `uuid`, so the schemas index that column. Databases created from an older schema need
+  the index added by hand (SQLite gets it on startup):
+
+    ```sql
+    -- PostgreSQL
+    CREATE INDEX speedtest_users_uuid_idx ON speedtest_users (uuid);
+    -- MySQL
+    CREATE INDEX speedtest_users_uuid_idx ON speedtest_users (uuid(26));
+    -- MSSQL (nvarchar(max) columns cannot be indexed)
+    ALTER TABLE speedtest_users ALTER COLUMN uuid nvarchar(64) NULL;
+    CREATE NONCLUSTERED INDEX IX_speedtest_users_uuid ON speedtest_users (uuid);
+    ```
+
+## ISP lookup and privacy
+
+The client's ISP and country come from the [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json) API. Only the
+client's IP address is sent: no API key, cookies or other identifiers. Private and special addresses (including
+CGNAT and IPv6 ULA) are never sent. The client IP is taken from the connection, or from the `X-Forwarded-For`,
+`X-Real-IP`, `Client-IP` and `CF-Connecting-IPv6` headers when a proxy sets them.
+
+* To use another API, point `ip_lookup_url` at it. `{ip}` in the URL is replaced with the client's IP, and the
+  response must be JSON with `ip`, `city`, `country`, `iso_code` and `org` fields.
+* To turn lookups off for everyone, set `ip_lookup_url=""`. To turn them off in the web UI only, set
+  `getIp_ispInfo: false` in its settings.
+
+## Languages
+
+The pages and the result image are in English and Ukrainian. The language follows the browser, and the flag switch
+in the top bar changes it. The page texts live in `web/assets/javascript/i18n.js`, and the result image's labels in
+`imageTexts` in `results/png.go`.
+
+## Differences from the PHP backend
+
+* Test IDs are [ULIDs](https://github.com/ulid/spec) instead of auto-increment numbers. With
+  `enable_id_obfuscation`, they are obfuscated with a salt kept in `idObfuscation_salt.bin`.
+* The ISP is looked up with an API (see above) instead of ipinfo.io or an offline GeoIP database, so no API key or
+  `.mmdb` file is needed.
+* The distance between client and server is not calculated, so `server_lat`, `server_lng`, `ipinfo_api_key` and
+  `geoip_database_file` are not used.
 
 ## License
+
 Copyright (C) 2016-2020 Federico Dossena
 Copyright (C) 2020 Maddie Zhan
 
