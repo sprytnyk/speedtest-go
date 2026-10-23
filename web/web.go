@@ -40,6 +40,15 @@ var (
 )
 
 func ListenAndServe(conf *config.Config) error {
+	r := newRouter(conf)
+
+	go listenProxyProtocol(conf, r)
+
+	return startListener(conf, r)
+}
+
+// newRouter sets up the middleware and every route the server answers.
+func newRouter(conf *config.Config) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.GetHead)
@@ -67,40 +76,25 @@ func ListenAndServe(conf *config.Config) error {
 	}
 
 	r.Get(conf.BaseURL+"/*", pages(assetFS, conf.BaseURL))
-	r.HandleFunc(conf.BaseURL+"/empty", empty)
-	r.HandleFunc(conf.BaseURL+"/backend/empty", empty)
-	r.Get(conf.BaseURL+"/garbage", garbage)
-	r.Get(conf.BaseURL+"/backend/garbage", garbage)
-	r.Get(conf.BaseURL+"/getIP", getIP)
-	r.Get(conf.BaseURL+"/backend/getIP", getIP)
-	r.Get(conf.BaseURL+"/results", results.DrawPNG)
-	r.Get(conf.BaseURL+"/results/", results.DrawPNG)
-	r.Get(conf.BaseURL+"/backend/results", results.DrawPNG)
-	r.Get(conf.BaseURL+"/backend/results/", results.DrawPNG)
-	r.Post(conf.BaseURL+"/results/telemetry", results.Record)
-	r.Post(conf.BaseURL+"/backend/results/telemetry", results.Record)
-	r.HandleFunc(conf.BaseURL+"/stats", results.Stats)
-	r.HandleFunc(conf.BaseURL+"/backend/stats", results.Stats)
-	r.Get(conf.BaseURL+"/results/json", results.JSONResult)
-	r.Get(conf.BaseURL+"/backend/results/json", results.JSONResult)
+	for _, prefix := range []string{conf.BaseURL, conf.BaseURL + "/backend"} {
+		withSlash(r.HandleFunc, prefix+"/empty", empty)
+		withSlash(r.Get, prefix+"/garbage", garbage)
+		withSlash(r.Get, prefix+"/getIP", getIP)
+		withSlash(r.Get, prefix+"/results", results.DrawPNG)
+		withSlash(r.Post, prefix+"/results/telemetry", results.Record)
+		withSlash(r.Get, prefix+"/results/json", results.JSONResult)
+		withSlash(r.HandleFunc, prefix+"/stats", results.Stats)
 
-	// PHP frontend default values compatibility
-	r.HandleFunc(conf.BaseURL+"/empty.php", empty)
-	r.HandleFunc(conf.BaseURL+"/backend/empty.php", empty)
-	r.Get(conf.BaseURL+"/garbage.php", garbage)
-	r.Get(conf.BaseURL+"/backend/garbage.php", garbage)
-	r.Get(conf.BaseURL+"/getIP.php", getIP)
-	r.Get(conf.BaseURL+"/backend/getIP.php", getIP)
-	r.Post(conf.BaseURL+"/results/telemetry.php", results.Record)
-	r.Post(conf.BaseURL+"/backend/results/telemetry.php", results.Record)
-	r.HandleFunc(conf.BaseURL+"/stats.php", results.Stats)
-	r.HandleFunc(conf.BaseURL+"/backend/stats.php", results.Stats)
-	r.Get(conf.BaseURL+"/results/json.php", results.JSONResult)
-	r.Get(conf.BaseURL+"/backend/results/json.php", results.JSONResult)
+		// PHP frontend default values compatibility
+		withSlash(r.HandleFunc, prefix+"/empty.php", empty)
+		withSlash(r.Get, prefix+"/garbage.php", garbage)
+		withSlash(r.Get, prefix+"/getIP.php", getIP)
+		withSlash(r.Post, prefix+"/results/telemetry.php", results.Record)
+		withSlash(r.HandleFunc, prefix+"/stats.php", results.Stats)
+		withSlash(r.Get, prefix+"/results/json.php", results.JSONResult)
+	}
 
-	go listenProxyProtocol(conf, r)
-
-	return startListener(conf, r)
+	return r
 }
 
 func listenProxyProtocol(conf *config.Config, r *chi.Mux) {
@@ -127,6 +121,15 @@ func pages(fs http.FileSystem, BaseURL string) http.HandlerFunc {
 		}
 		fileServer.ServeHTTP(w, r)
 	}
+}
+
+// withSlash routes path both without and with a trailing slash to the same
+// handler. Both are served directly: speedtest-cli joins its URLs with
+// path.Join, which drops the slash, and it cannot follow a redirect on an
+// upload, whose body it streams and so cannot send again.
+func withSlash(route func(string, http.HandlerFunc), path string, h http.HandlerFunc) {
+	route(path, h)
+	route(path+"/", h)
 }
 
 // sendPHPCORSHeaders sets CORS headers matching the PHP backend's ?cors parameter behavior.
