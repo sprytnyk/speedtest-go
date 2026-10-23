@@ -135,21 +135,21 @@ func TestStatsPage(t *testing.T) {
 	}
 	login := func(password string) *httptest.ResponseRecorder {
 		body := url.Values{"password": {password}}.Encode()
-		req := httptest.NewRequest(http.MethodPost, "/stats?op=login", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/stats/?op=login", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		rec := httptest.NewRecorder()
 		Stats(rec, req)
 		return rec
 	}
 
-	if rec := get("/stats", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `name="password"`) {
+	if rec := get("/stats/", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `name="password"`) {
 		t.Fatalf("login form: status %d", rec.Code)
 	}
 	if rec := login("wrong"); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "Wrong password") {
 		t.Fatalf("wrong password: status %d", rec.Code)
 	}
 	// a password in the URL must not log in
-	if rec := get("/stats?op=login&password=secret", nil); rec.Code != http.StatusForbidden {
+	if rec := get("/stats/?op=login&password=secret", nil); rec.Code != http.StatusForbidden {
 		t.Fatalf("password in URL: status %d", rec.Code)
 	}
 
@@ -159,13 +159,13 @@ func TestStatsPage(t *testing.T) {
 	}
 	cookies := rec.Result().Cookies()
 
-	rec = get("/stats", cookies)
+	rec = get("/stats/", cookies)
 	list := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(list, "stats?id=01M50T633MHM87DVNWXDTJGHPZ") || !strings.Contains(list, "Example ISP, Ukraine") {
+	if rec.Code != http.StatusOK || !strings.Contains(list, "stats/?id=01M50T633MHM87DVNWXDTJGHPZ") || !strings.Contains(list, "Example ISP, Ukraine") {
 		t.Fatalf("list: status %d\n%s", rec.Code, list)
 	}
 
-	rec = get("/stats?id=01M50T633MHM87DVNWXDTJGHPZ", cookies)
+	rec = get("/stats/?id=01M50T633MHM87DVNWXDTJGHPZ", cookies)
 	detail := rec.Body.String()
 	for _, want := range []string{
 		"Kyiv, Ukraine (UA)",
@@ -184,11 +184,11 @@ func TestStatsPage(t *testing.T) {
 		t.Error("user agent is not escaped")
 	}
 
-	if rec := get("/stats?id=01M50T633MHM87DVNWXDTJGHPA", cookies); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Test not found") {
+	if rec := get("/stats/?id=01M50T633MHM87DVNWXDTJGHPA", cookies); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Test not found") {
 		t.Errorf("unknown ID: status %d", rec.Code)
 	}
 
-	if rec := get("/stats?op=logout", cookies); rec.Code != http.StatusSeeOther {
+	if rec := get("/stats/?op=logout", cookies); rec.Code != http.StatusSeeOther {
 		t.Errorf("logout: status %d", rec.Code)
 	}
 }
@@ -197,7 +197,7 @@ func TestStatsPageLocked(t *testing.T) {
 	for _, password := range []string{`"PASSWORD"`, `""`} {
 		loadTestConfig(t, "database_type=\"memory\"\nstatistics_password="+password+"\n")
 		database.DB = memory.Open("")
-		req := httptest.NewRequest(http.MethodPost, "/stats?op=login", strings.NewReader("password="))
+		req := httptest.NewRequest(http.MethodPost, "/stats/?op=login", strings.NewReader("password="))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		rec := httptest.NewRecorder()
 		Stats(rec, req)
@@ -208,7 +208,7 @@ func TestStatsPageLocked(t *testing.T) {
 
 	loadTestConfig(t, "database_type=\"none\"\n")
 	rec := httptest.NewRecorder()
-	Stats(rec, httptest.NewRequest(http.MethodGet, "/stats", nil))
+	Stats(rec, httptest.NewRequest(http.MethodGet, "/stats/", nil))
 	if !strings.Contains(rec.Body.String(), "Statistics are disabled") {
 		t.Errorf("database_type none: %s", rec.Body.String())
 	}

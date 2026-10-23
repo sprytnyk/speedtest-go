@@ -944,7 +944,7 @@
             LibreSpeed
           </a>
           {{- if .LoggedIn }}
-          <form action="{{ .BaseURL }}stats" method="get">
+          <form action="{{ .BaseURL }}stats/" method="get">
             <input type="hidden" name="op" value="logout" />
             <button type="submit" class="btn btn-secondary btn-small">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1024,7 +1024,7 @@
             </div>
           </div>
           {{- end }}
-          <form class="login" action="{{ .BaseURL }}stats?op=login" method="post">
+          <form class="login" action="{{ .BaseURL }}stats/?op=login" method="post">
             <label for="password" data-i18n="stats.password">Password</label>
             <input type="password" id="password" name="password" autocomplete="current-password" required autofocus />
             <button type="submit" class="btn btn-primary btn-block" data-i18n="stats.signIn">Sign in</button>
@@ -1032,7 +1032,7 @@
         </section>
         {{- else }}
         <section class="card toolbar animate-fade-in">
-          <form class="search" action="{{ .BaseURL }}stats" method="get" role="search">
+          <form class="search" action="{{ .BaseURL }}stats/" method="get" role="search">
             <label for="id" data-i18n="stats.search">Find a test by its ID</label>
             <div class="search-row">
               <input type="text" id="id" name="id" value="{{ .Query }}" placeholder="Test ID" data-i18n-attr="placeholder:stats.idPlaceholder" autocomplete="off" autocapitalize="off" spellcheck="false" required />
@@ -1040,7 +1040,7 @@
             </div>
           </form>
           {{- if .Query }}
-          <a class="back" href="{{ .BaseURL }}stats">
+          <a class="back" href="{{ .BaseURL }}stats/">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="m12 19-7-7 7-7"></path>
               <path d="M19 12H5"></path>
@@ -1272,8 +1272,8 @@
               <tbody>
                 {{- range .Data }}
                 <tr>
-                  <td class="time"><a href="{{ $.BaseURL }}stats?id={{ .UUID }}"><time datetime="{{ .Time }}" title="{{ .TimeText }}">{{ .TimeText }}</time></a></td>
-                  <td class="id"><a href="{{ $.BaseURL }}stats?id={{ .UUID }}">{{ .UUID }}</a></td>
+                  <td class="time"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}"><time datetime="{{ .Time }}" title="{{ .TimeText }}">{{ .TimeText }}</time></a></td>
+                  <td class="id"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}">{{ .UUID }}</a></td>
                   <td class="num" data-label="Download, Mbps" data-i18n-attr="data-label:stats.col.download"><span data-num="{{ .DownloadText }}">{{ .DownloadText }}</span></td>
                   <td class="num" data-label="Upload, Mbps" data-i18n-attr="data-label:stats.col.upload"><span data-num="{{ .UploadText }}">{{ .UploadText }}</span></td>
                   <td class="num" data-label="Ping, ms" data-i18n-attr="data-label:stats.col.ping"><span data-num="{{ .PingText }}">{{ .PingText }}</span></td>

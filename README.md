@@ -142,7 +142,7 @@ with a result image, and the statistics page. To turn it on:
 
 1. Choose a database with `database_type`. `sqlite` is the simplest: it only needs `database_file`, and creates
    its tables itself.
-2. Set `statistics_password` to open the statistics page at `/stats`.
+2. Set `statistics_password` to open the statistics page at `/stats/`.
 3. Copy `web/assets` to a directory of your own, set `assets_path` to it, and add a `settings.json` there:
 
     ```json
@@ -157,7 +157,7 @@ A stored test can then be read at:
 
 * `/results/?id=<id>`: the result image, in Ukrainian with `&lang=uk`
 * `/results/json?id=<id>`: the result as JSON
-* `/stats`: the latest 100 tests, and every detail of a single test
+* `/stats/`: the latest 100 tests, and every detail of a single test
 
 ### Databases
 

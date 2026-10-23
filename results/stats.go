@@ -27,7 +27,7 @@ import (
 
 // StatsData is what the stats page template renders.
 type StatsData struct {
-	BaseURL     string // ends with a slash, for links that work from /stats and /backend/stats alike
+	BaseURL     string // ends with a slash, for links that work from /stats/ and /backend/stats/ alike
 	Disabled    bool   // database_type is none
 	NoPassword  bool   // statistics_password is not set
 	LoggedIn    bool
@@ -125,7 +125,7 @@ func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, d
 	session, _ := store.Get(r, "logged")
 	auth, _ := session.Values["authenticated"].(bool)
 	op := r.FormValue("op")
-	statsURL := conf.BaseURL + "/stats"
+	statsURL := conf.BaseURL + "/stats/"
 
 	if !auth {
 		if op != "login" {
