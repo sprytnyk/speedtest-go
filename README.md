@@ -150,8 +150,8 @@ with a result image, and the statistics page. To turn it on:
     ```
 
     `basic` stores the results only; `full` also stores the test log shown on the statistics page.
-4. Put your contact address into the privacy policy in `index.html` (search for `PUT@YOUR_EMAIL.HERE`). The policy
-   is shown to users before they start a test.
+4. Put your contact address into the privacy policy in `index.html` in place of `krlsv@pm.me`. The policy is shown
+   to users before they start a test.
 
 A stored test can then be read at:
 
