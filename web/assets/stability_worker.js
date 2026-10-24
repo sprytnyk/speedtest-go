@@ -252,8 +252,9 @@ function doPingExternal() {
   const remainingMs =
     settings.duration > 0 ? Math.max(1, settings.duration * 1000 - (prevT - startTime)) : settings.ping_timeout;
   const timeoutMs = Math.min(settings.ping_timeout, remainingMs);
-  const url =
-    settings.url_ping_external + (settings.url_ping_external.indexOf("?") >= 0 ? "&" : "?") + "r=" + Math.random();
+  // no cache-busting parameter: "no-store" already skips the browser cache, and a unique URL would push
+  // every ping past the target's CDN edge to its origin, measuring their backend instead of the connection
+  const url = settings.url_ping_external;
 
   let timeoutId = null;
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
