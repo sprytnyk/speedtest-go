@@ -157,7 +157,8 @@ A stored test can then be read at:
 
 * `/results/?id=<id>`: the result image, in Ukrainian with `&lang=uk`
 * `/results/json?id=<id>`: the result as JSON
-* `/stats/`: the latest 100 tests, and every detail of a single test
+* `/stats/`: the latest 100 tests, and every detail of a single test. Tests can be deleted there one by one, a
+  selection at a time, or all at once
 
 ### Databases
 
