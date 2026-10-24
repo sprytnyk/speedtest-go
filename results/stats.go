@@ -58,7 +58,8 @@ type LogLine struct {
 type StatsEntry struct {
 	schema.TelemetryData
 	Time         string // RFC 3339, reformatted in the viewer's language by the page
-	TimeText     string
+	TimeText     string // 2026-10-24 17:10, in the server's time zone until the page shows the viewer's
+	TimeFull     string // with seconds and the time zone, shown on hover
 	ISP          string
 	Location     string
 	Lookup       string // the ISP lookup summary, "IP - ISP, Country"
@@ -250,7 +251,8 @@ func newStatsEntry(t schema.TelemetryData) StatsEntry {
 	e := StatsEntry{
 		TelemetryData: t,
 		Time:          t.Timestamp.Format(time.RFC3339),
-		TimeText:      t.Timestamp.Format("2006-01-02 15:04:05 MST"),
+		TimeText:      t.Timestamp.Format("2006-01-02 15:04"),
+		TimeFull:      t.Timestamp.Format("2006-01-02 15:04:05 MST"),
 		Languages:     readableLanguages(t.Language),
 		LogLines:      readableLog(t.Log),
 		DownloadText:  statValue(t.Download),

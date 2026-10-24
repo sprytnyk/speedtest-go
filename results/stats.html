@@ -1262,7 +1262,7 @@
           <div class="card-head">
             <div>
               <h2 class="card-title" id="result-title" data-i18n="stats.result">Test result</h2>
-              <p class="card-note"><time datetime="{{ .Time }}" title="{{ .TimeText }}">{{ .TimeText }}</time></p>
+              <p class="card-note"><time datetime="{{ .Time }}" title="{{ .TimeFull }}">{{ .TimeText }}</time></p>
             </div>
             <div class="card-actions">
               <p class="test-id">{{ .UUID }}</p>
@@ -1531,7 +1531,7 @@
                 {{- range .Data }}
                 <tr>
                   <td class="select"><input type="checkbox" name="id" value="{{ .UUID }}" form="delete-selected" aria-label="Select this test" data-i18n-attr="aria-label:stats.select" /></td>
-                  <td class="time"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}"><time datetime="{{ .Time }}" title="{{ .TimeText }}">{{ .TimeText }}</time></a></td>
+                  <td class="time"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}"><time datetime="{{ .Time }}" title="{{ .TimeFull }}">{{ .TimeText }}</time></a></td>
                   <td class="id"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}">{{ .UUID }}</a></td>
                   <td class="num" data-label="Download, Mbps" data-i18n-attr="data-label:stats.col.download"><span data-num="{{ .DownloadText }}">{{ .DownloadText }}</span></td>
                   <td class="num" data-label="Upload, Mbps" data-i18n-attr="data-label:stats.col.upload"><span data-num="{{ .UploadText }}">{{ .UploadText }}</span></td>
@@ -1591,6 +1591,10 @@
         if (!I18N) return;
         document.querySelector(".lang-switch").hidden = false;
 
+        function pad(n) {
+          return (n < 10 ? "0" : "") + n;
+        }
+
         function localize() {
           var lang = I18N.lang();
           var nums = document.querySelectorAll("[data-num]");
@@ -1602,15 +1606,10 @@
           for (var j = 0; j < times.length; j++) {
             var date = new Date(times[j].getAttribute("datetime"));
             if (isNaN(date)) continue;
-            times[j].textContent = date.toLocaleString(lang, {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-              hourCycle: "h23",
-            });
+            // the same short ISO form in every language: 2026-10-24 17:10, in the viewer's time zone
+            times[j].textContent =
+              date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) + " " +
+              pad(date.getHours()) + ":" + pad(date.getMinutes());
           }
 
           // the result image has its labels in the page's language too

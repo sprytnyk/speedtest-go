@@ -207,7 +207,7 @@ func renderResult(record *schema.TelemetryData, isp string, text imageText) *ima
 
 	// footer: provider on the left, time on the right
 	baseline := canvasHeight - padding + 2
-	ts := record.Timestamp.Format("2006-01-02 15:04:05")
+	ts := record.Timestamp.Format("2006-01-02 15:04")
 	tsWidth := textWidth(footFace, ts)
 	drawText(img, footFace, colorMuted, canvasWidth-padding-tsWidth, baseline, ts)
 	if isp != "" {
