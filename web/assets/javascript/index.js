@@ -20,6 +20,10 @@ const testState = {
   aborted: false, // the last test was stopped before it finished
   startedAt: 0, // performance.now() when the test started
   samples: [], // { t: seconds since start, v: Mbps, kind: "dl" | "ul" }
+  loaded: { download: null, upload: null }, // latency while each transfer ran, from the stability worker
+  latencyWorker: null, // pings the server while the download or upload runs
+  latencyKind: null, // "download" or "upload" while latencyWorker runs
+  customStreams: false, // settings.json sets the download streams itself
   hoverX: null, // pointer position over the chart, in CSS pixels
   dirty: true, // re-render on the next animation frame
 };
@@ -82,6 +86,7 @@ function createSpeedtest() {
   testState.speedtest.onupdate = (data) => {
     testState.testData = data;
     recordSample(data);
+    trackLoadedLatency(data);
     testState.dirty = true;
   };
   testState.speedtest.onend = (aborted) => {
@@ -152,8 +157,13 @@ function startButtonClickHandler() {
     case FINISHED:
       testState.testData = null;
       testState.samples = [];
+      testState.loaded = { download: null, upload: null };
       testState.aborted = false;
       testState.hoverX = null;
+      if (!testState.customStreams) {
+        // over HTTP/1.1 browsers open at most 6 connections to a server, so leave room for the latency pings
+        testState.speedtest.setParameter("xhr_dlMultistream", multiplexed(testState.speedtest.getSelectedServer()) ? 6 : 4);
+      }
       testState.startedAt = performance.now();
       testState.speedtest.start();
       testState.state = RUNNING;
@@ -197,6 +207,7 @@ async function applySettingsJSON() {
     }
     for (let setting in settings) {
       testState.speedtest.setParameter(setting, settings[setting]);
+      if (setting == "xhr_dlMultistream") testState.customStreams = true;
       if (
         setting == "telemetry_level" &&
         settings[setting] &&
@@ -378,6 +389,62 @@ function recordSample(data) {
 }
 
 /**
+ * Whether the page reaches the server over HTTP/2 or HTTP/3, where all requests share one connection
+ * @param {Object} server - a server object
+ */
+function multiplexed(server) {
+  try {
+    if (new URL(server.server, location.href).origin !== location.origin) return false;
+    const navigation = performance.getEntriesByType("navigation")[0];
+    return /^h[23]/.test(navigation.nextHopProtocol);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Ping the server while the download or upload runs, with a new stability worker for each
+ * @param {Object} data - status update from the speedtest worker
+ */
+function trackLoadedLatency(data) {
+  // the worker keeps its state through the pause after a transfer, but the transfer's progress is 1 by then
+  let kind = null;
+  if (data.testState === 1 && Number(data.dlProgress) < 1) kind = "download";
+  else if (data.testState === 3 && Number(data.ulProgress) < 1) kind = "upload";
+  if (kind === testState.latencyKind) return;
+
+  stopLatencyWorker();
+  if (!kind) return;
+  const server = testState.speedtest.getSelectedServer();
+  // pings run in their own worker, so the download's resource timings don't mix with theirs
+  const worker = new Worker("stability_worker.js?r=" + Math.random());
+  const updater = setInterval(() => worker.postMessage("status"), 200);
+  worker.onmessage = (e) => {
+    const status = JSON.parse(e.data);
+    const stats = status.phases[0];
+    if (stats.samples > stats.failed) testState.loaded[kind] = stats;
+    if (status.testState >= 4) {
+      clearInterval(updater);
+      worker.terminate();
+    }
+    testState.dirty = true;
+  };
+  worker.postMessage("start " + JSON.stringify({ url_ping: server.server + server.pingURL, duration: 0, mpot: true }));
+  testState.latencyWorker = worker;
+  testState.latencyKind = kind;
+}
+
+function stopLatencyWorker() {
+  const worker = testState.latencyWorker;
+  testState.latencyWorker = null;
+  testState.latencyKind = null;
+  if (!worker) return;
+  // the status after "finish" carries the last pings and ends the worker
+  worker.postMessage("finish");
+  worker.postMessage("status");
+}
+
+/**
  * Start the requestAnimationFrame UI rendering loop
  */
 function startRenderingLoop() {
@@ -466,17 +533,20 @@ function renderStatus() {
   } else if (testState.state === FINISHED && data) {
     cls = "ok";
     title = I18N.t("index.status.complete");
-    const parts = [];
-    const results = [
+    // one sentence for the speeds and one for the latency of each phase; jitter is left to its card
+    const sentences = [];
+    const speeds = summaryParts([
       ["index.summary.download", data.dlStatus],
       ["index.summary.upload", data.ulStatus],
-      ["index.summary.ping", data.pingStatus],
-      ["index.summary.jitter", data.jitterStatus],
-    ];
-    for (const [key, value] of results) {
-      if (formatNumber(value) !== "--") parts.push(I18N.t(key, { v: formatNumber(value) }));
-    }
-    text = parts.length ? capitalize(parts.join(", ")) + "." : I18N.t("index.status.none");
+    ]);
+    if (speeds.length) sentences.push(capitalize(speeds.join(", ")) + ".");
+    const latency = summaryParts([
+      ["index.summary.idle", idleLatency(data)],
+      ["index.summary.downloading", testState.loaded.download && testState.loaded.download.avg],
+      ["index.summary.uploading", testState.loaded.upload && testState.loaded.upload.avg],
+    ]);
+    if (latency.length) sentences.push(I18N.t("index.summary.latency", { v: latency.join(", ") }));
+    text = sentences.length ? sentences.join(" ") : I18N.t("index.status.none");
   } else if (testState.aborted) {
     title = I18N.t("status.stopped");
     text = I18N.t("index.status.stoppedText");
@@ -494,8 +564,10 @@ function renderResults() {
   const data = testState.testData || {};
   setStat("download-speed", formatNumber(data.dlStatus));
   setStat("upload-speed", formatNumber(data.ulStatus));
-  setStat("ping", formatNumber(data.pingStatus));
+  setStat("ping", formatNumber(idleLatency(data)));
   setStat("jitter", formatNumber(data.jitterStatus));
+  setLoaded("download-latency", testState.loaded.download);
+  setLoaded("upload-latency", testState.loaded.upload);
   $("download-progress").style.width = Math.round((Number(data.dlProgress) || 0) * 100) + "%";
   $("upload-progress").style.width = Math.round((Number(data.ulProgress) || 0) * 100) + "%";
 
@@ -509,6 +581,27 @@ function setStat(id, text) {
   const el = $(id);
   el.textContent = text;
   el.parentNode.classList.toggle("empty", text === "--");
+}
+
+// the average of the ping test, like the latency under load; workers without it report the lowest ping
+function idleLatency(data) {
+  return data.pingAvgStatus !== undefined ? data.pingAvgStatus : data.pingStatus;
+}
+
+// the numbers stand out from the words around them, like the label before them
+function setLoaded(id, stats) {
+  const el = $(id);
+  if (!stats) {
+    el.textContent = "--";
+    return;
+  }
+  const value = (v) => {
+    const span = document.createElement("span");
+    span.className = "stat-sub-value";
+    span.textContent = formatNumber(v) + " " + I18N.t("unit.ms");
+    return span;
+  };
+  el.replaceChildren(value(stats.avg), ", " + I18N.t("index.loaded.jitter") + " ", value(stats.jitter));
 }
 
 /**
@@ -680,6 +773,19 @@ function formatNumber(value) {
   value = Number(value);
   if (isNaN(value) || value < 0) return "--";
   return I18N.num(value, value < 10 ? 2 : value < 100 ? 1 : 0);
+}
+
+/**
+ * Fill in each measured value's text, skipping the ones not measured
+ * @param {Array} results - pairs of a translation key and a value
+ * @returns {string[]} The texts
+ */
+function summaryParts(results) {
+  const parts = [];
+  for (const [key, value] of results) {
+    if (formatNumber(value) !== "--") parts.push(I18N.t(key, { v: formatNumber(value) }));
+  }
+  return parts;
 }
 
 function capitalize(text) {

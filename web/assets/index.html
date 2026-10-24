@@ -650,9 +650,8 @@
         font-size: 0.8125rem;
         font-weight: 500;
         color: var(--text-muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
       }
 
       .stat-value {
@@ -679,6 +678,19 @@
         font-weight: 500;
         color: var(--text-muted);
         margin-left: 0.25rem;
+      }
+
+      /* latency while the download or upload runs */
+      .stat-sub {
+        margin-top: 0.125rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
+      }
+
+      .stat-sub-value {
+        color: var(--text-soft);
       }
 
       .phase {
@@ -1008,6 +1020,10 @@
           font-size: 1.5rem;
           text-align: right;
         }
+        .stat.main .stat-sub {
+          grid-column: 1 / -1;
+          text-align: right;
+        }
         .stat.main .phase {
           grid-column: 1 / -1;
         }
@@ -1155,6 +1171,7 @@
                 <p class="stat-label" data-i18n="index.download">Download</p>
               </div>
               <p class="stat-value"><span id="download-speed">--</span><span class="stat-unit" data-i18n="unit.mbps">Mbps</span></p>
+              <p class="stat-sub"><span data-i18n="index.loaded">Latency</span> <span id="download-latency">--</span></p>
               <div class="phase download" aria-hidden="true"><div id="download-progress"></div></div>
             </div>
             <div class="stat main">
@@ -1168,6 +1185,7 @@
                 <p class="stat-label" data-i18n="index.upload">Upload</p>
               </div>
               <p class="stat-value"><span id="upload-speed">--</span><span class="stat-unit" data-i18n="unit.mbps">Mbps</span></p>
+              <p class="stat-sub"><span data-i18n="index.loaded">Latency</span> <span id="upload-latency">--</span></p>
               <div class="phase upload" aria-hidden="true"><div id="upload-progress"></div></div>
             </div>
             <div class="stat">
@@ -1177,7 +1195,7 @@
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                   </svg>
                 </div>
-                <p class="stat-label" data-i18n="index.ping">Ping</p>
+                <p class="stat-label" data-i18n="index.idleLatency">Idle latency</p>
               </div>
               <p class="stat-value"><span id="ping">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
             </div>
@@ -1190,7 +1208,7 @@
                     <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
                   </svg>
                 </div>
-                <p class="stat-label" data-i18n="index.jitter">Jitter</p>
+                <p class="stat-label" data-i18n="index.idleJitter">Idle jitter</p>
               </div>
               <p class="stat-value"><span id="jitter">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
             </div>

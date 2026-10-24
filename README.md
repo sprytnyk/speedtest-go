@@ -27,7 +27,7 @@ This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedt
 
 ## Features
 
-* Download and upload speed, ping and jitter, with a live speed chart
+* Download and upload speed, ping and jitter, with a live speed chart, and latency while downloading and uploading
 * IP address, ISP and country of the client
 * Connection stability test (`/stability.html`): latency over time, jitter, failed requests, an alert threshold and
   CSV export, idle or under load (idle, then download, then upload, with latency for each phase)

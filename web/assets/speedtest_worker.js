@@ -10,6 +10,7 @@ let testState = -1; // -1=not started, 0=starting, 1=download test, 2=ping+jitte
 let dlStatus = ""; // download speed in megabit/s with 2 decimal digits
 let ulStatus = ""; // upload speed in megabit/s with 2 decimal digits
 let pingStatus = ""; // ping in milliseconds with 2 decimal digits
+let pingAvgStatus = ""; // average of the pings in milliseconds with 2 decimal digits
 let jitterStatus = ""; // jitter in milliseconds with 2 decimal digits
 let clientIp = ""; // client's IP address as reported by getIP.php
 let dlProgress = 0; //progress of download test 0-1
@@ -96,6 +97,7 @@ this.addEventListener("message", function(e) {
 				dlStatus: dlStatus,
 				ulStatus: ulStatus,
 				pingStatus: pingStatus,
+				pingAvgStatus: pingAvgStatus,
 				clientIp: clientIp,
 				jitterStatus: jitterStatus,
 				dlProgress: dlProgress,
@@ -255,6 +257,7 @@ this.addEventListener("message", function(e) {
 		dlStatus = "";
 		ulStatus = "";
 		pingStatus = "";
+		pingAvgStatus = "";
 		jitterStatus = "";
         clientIp = "";
 		dlProgress = 0;
@@ -594,6 +597,8 @@ function pingTest(done) {
 	let jitter = 0.0; // current jitter value
 	let i = 0; // counter of pongs received
 	let prevInstspd = 0; // last ping time, used for jitter calculation
+	let pingSum = 0; // sum of the ping times, for the average
+	let pingCount = 0; // pings measured, which can be fewer than i when errors are ignored
 	xhr = [];
 	// ping function
 	const doPing = function() {
@@ -625,6 +630,9 @@ function pingTest(done) {
 				if (instspd < 1) instspd = prevInstspd;
 				if (instspd < 1) instspd = 1;
 				const instjitter = Math.abs(instspd - prevInstspd);
+				pingSum += instspd;
+				pingCount++;
+				pingAvgStatus = (pingSum / pingCount).toFixed(2);
 				if (i === 1) ping = instspd;
 				/* first ping, can't tell jitter yet*/ else {
 					if (instspd < ping) ping = instspd; // update ping, if the instant ping is lower
@@ -652,6 +660,7 @@ function pingTest(done) {
 			if (settings.xhr_ignoreErrors === 0) {
 				//abort
 				pingStatus = "Fail";
+				pingAvgStatus = "Fail";
 				jitterStatus = "Fail";
 				clearRequests();
 				tlog("ping test failed, took " + (new Date().getTime() - startT) + "ms");
