@@ -81,3 +81,37 @@ func (p *Bolt) FetchLast100() ([]schema.TelemetryData, error) {
 	})
 	return records, err
 }
+
+func (p *Bolt) DeleteByUUIDs(uuids []string) (int64, error) {
+	var deleted int64
+	err := p.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
+			return nil
+		}
+		for _, uuid := range uuids {
+			if bucket.Get([]byte(uuid)) == nil {
+				continue
+			}
+			if err := bucket.Delete([]byte(uuid)); err != nil {
+				return err
+			}
+			deleted++
+		}
+		return nil
+	})
+	return deleted, err
+}
+
+func (p *Bolt) DeleteAll() (int64, error) {
+	var deleted int64
+	err := p.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
+			return nil
+		}
+		deleted = int64(bucket.Stats().KeyN)
+		return tx.DeleteBucket([]byte(bucketName))
+	})
+	return deleted, err
+}

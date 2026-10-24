@@ -22,6 +22,9 @@ type DataAccess interface {
 	Insert(*schema.TelemetryData) error
 	FetchByUUID(string) (*schema.TelemetryData, error)
 	FetchLast100() ([]schema.TelemetryData, error)
+	// DeleteByUUIDs and DeleteAll return the number of tests deleted
+	DeleteByUUIDs([]string) (int64, error)
+	DeleteAll() (int64, error)
 }
 
 func SetDBInfo(conf *config.Config) {

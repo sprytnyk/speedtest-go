@@ -96,3 +96,34 @@ func (p *SQLite) FetchLast100() ([]schema.TelemetryData, error) {
 	}
 	return records, rows.Err()
 }
+
+func (p *SQLite) DeleteByUUIDs(uuids []string) (int64, error) {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("sqlite delete by uuid: %w", err)
+	}
+	defer tx.Rollback()
+	stmt, err := tx.Prepare(`DELETE FROM speedtest_users WHERE uuid = ?`)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite delete by uuid: %w", err)
+	}
+	defer stmt.Close()
+	var deleted int64
+	for _, uuid := range uuids {
+		res, err := stmt.Exec(uuid)
+		if err != nil {
+			return 0, fmt.Errorf("sqlite delete by uuid: %w", err)
+		}
+		n, _ := res.RowsAffected()
+		deleted += n
+	}
+	return deleted, tx.Commit()
+}
+
+func (p *SQLite) DeleteAll() (int64, error) {
+	res, err := p.db.Exec(`DELETE FROM speedtest_users;`)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite delete all: %w", err)
+	}
+	return res.RowsAffected()
+}

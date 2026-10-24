@@ -79,3 +79,34 @@ func (p *MSSQL) FetchLast100() ([]schema.TelemetryData, error) {
 	}
 	return records, rows.Err()
 }
+
+func (p *MSSQL) DeleteByUUIDs(uuids []string) (int64, error) {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("mssql delete by uuid: %w", err)
+	}
+	defer tx.Rollback()
+	stmt, err := tx.Prepare(`DELETE FROM speedtest_users WHERE uuid = @p1`)
+	if err != nil {
+		return 0, fmt.Errorf("mssql delete by uuid: %w", err)
+	}
+	defer stmt.Close()
+	var deleted int64
+	for _, uuid := range uuids {
+		res, err := stmt.Exec(uuid)
+		if err != nil {
+			return 0, fmt.Errorf("mssql delete by uuid: %w", err)
+		}
+		n, _ := res.RowsAffected()
+		deleted += n
+	}
+	return deleted, tx.Commit()
+}
+
+func (p *MSSQL) DeleteAll() (int64, error) {
+	res, err := p.db.Exec(`DELETE FROM speedtest_users;`)
+	if err != nil {
+		return 0, fmt.Errorf("mssql delete all: %w", err)
+	}
+	return res.RowsAffected()
+}

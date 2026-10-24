@@ -54,3 +54,31 @@ func (mem *Memory) FetchLast100() ([]schema.TelemetryData, error) {
 	}
 	return records, nil
 }
+
+func (mem *Memory) DeleteByUUIDs(uuids []string) (int64, error) {
+	mem.lock.Lock()
+	defer mem.lock.Unlock()
+	remove := make(map[string]bool, len(uuids))
+	for _, uuid := range uuids {
+		remove[uuid] = true
+	}
+	var deleted int64
+	kept := mem.records[:0]
+	for _, record := range mem.records {
+		if remove[record.UUID] {
+			deleted++
+			continue
+		}
+		kept = append(kept, record)
+	}
+	mem.records = kept
+	return deleted, nil
+}
+
+func (mem *Memory) DeleteAll() (int64, error) {
+	mem.lock.Lock()
+	defer mem.lock.Unlock()
+	deleted := int64(len(mem.records))
+	mem.records = nil
+	return deleted, nil
+}
