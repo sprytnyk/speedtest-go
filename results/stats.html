@@ -1306,7 +1306,11 @@
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                   </svg>
                 </div>
+                {{- if .IdleLatency }}
+                <p class="stat-label" data-i18n="index.idleLatency">Idle latency</p>
+                {{- else }}
                 <p class="stat-label" data-i18n="index.ping">Ping</p>
+                {{- end }}
               </div>
               <p class="stat-value"><span data-num="{{ .PingText }}">{{ .PingText }}</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
             </div>
@@ -1319,7 +1323,11 @@
                     <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"></path>
                   </svg>
                 </div>
+                {{- if .IdleLatency }}
+                <p class="stat-label" data-i18n="index.idleJitter">Idle jitter</p>
+                {{- else }}
                 <p class="stat-label" data-i18n="index.jitter">Jitter</p>
+                {{- end }}
               </div>
               <p class="stat-value"><span data-num="{{ .JitterText }}">{{ .JitterText }}</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
             </div>
@@ -1505,8 +1513,8 @@
                   <th data-i18n="stats.testId">Test ID</th>
                   <th class="num"><span class="dot download" aria-hidden="true"></span><span data-i18n="index.download">Download</span><span class="unit" data-i18n="unit.mbps">Mbps</span></th>
                   <th class="num"><span class="dot upload" aria-hidden="true"></span><span data-i18n="index.upload">Upload</span><span class="unit" data-i18n="unit.mbps">Mbps</span></th>
-                  <th class="num"><span data-i18n="index.ping">Ping</span><span class="unit" data-i18n="unit.ms">ms</span></th>
-                  <th class="num"><span data-i18n="index.jitter">Jitter</span><span class="unit" data-i18n="unit.ms">ms</span></th>
+                  <th class="num"><span data-i18n="index.idleLatency">Idle latency</span><span class="unit" data-i18n="unit.ms">ms</span></th>
+                  <th class="num"><span data-i18n="index.idleJitter">Idle jitter</span><span class="unit" data-i18n="unit.ms">ms</span></th>
                   <th data-i18n="stats.isp">Provider</th>
                   <th class="ip" data-i18n="stats.ip">IP address</th>
                 </tr>
@@ -1519,8 +1527,8 @@
                   <td class="id"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}">{{ .UUID }}</a></td>
                   <td class="num" data-label="Download, Mbps" data-i18n-attr="data-label:stats.col.download"><span data-num="{{ .DownloadText }}">{{ .DownloadText }}</span></td>
                   <td class="num" data-label="Upload, Mbps" data-i18n-attr="data-label:stats.col.upload"><span data-num="{{ .UploadText }}">{{ .UploadText }}</span></td>
-                  <td class="num" data-label="Ping, ms" data-i18n-attr="data-label:stats.col.ping"><span data-num="{{ .PingText }}">{{ .PingText }}</span></td>
-                  <td class="num" data-label="Jitter, ms" data-i18n-attr="data-label:stats.col.jitter"><span data-num="{{ .JitterText }}">{{ .JitterText }}</span></td>
+                  <td class="num" data-label="Idle latency, ms" data-i18n-attr="data-label:stats.col.ping"><span data-num="{{ .PingText }}">{{ .PingText }}</span></td>
+                  <td class="num" data-label="Idle jitter, ms" data-i18n-attr="data-label:stats.col.jitter"><span data-num="{{ .JitterText }}">{{ .JitterText }}</span></td>
                   <td class="isp" title="{{ .ISP }}">{{ if .ISP }}{{ .ISP }}{{ else }}--{{ end }}</td>
                   <td class="ip">{{ .IPAddress }}</td>
                 </tr>

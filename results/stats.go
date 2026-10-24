@@ -70,8 +70,9 @@ type StatsEntry struct {
 	LogLines     []LogLine
 	DownloadText string
 	UploadText   string
-	PingText     string
+	PingText     string // the average idle latency for tests stored with it, the lowest ping for older ones
 	JitterText   string
+	IdleLatency  bool // PingText is the average idle latency
 }
 
 var (
@@ -260,6 +261,11 @@ func newStatsEntry(t schema.TelemetryData) StatsEntry {
 
 	if latency, ok := parseLatency(t.Extra); ok {
 		e.Latency = latencyRows(latency)
+		// show the average like the speed test page does, rather than the lowest ping stored with the result
+		if latency.Idle.has() {
+			e.PingText = strconv.FormatFloat(*latency.Idle.Avg, 'f', 2, 64)
+			e.IdleLatency = true
+		}
 		e.Extra, e.ExtraText = readableFields(t.Extra, "latency")
 	} else {
 		e.Extra, e.ExtraText = readableFields(t.Extra)

@@ -68,6 +68,15 @@ func TestLatency(t *testing.T) {
 		t.Errorf("readableFields without latency = %+v, want %+v", fields, want)
 	}
 
+	// the stats show the average idle latency in place of the lowest ping, when it was stored
+	e := newStatsEntry(schema.TelemetryData{Ping: "12.40", Extra: `{"latency":{"idle":{"avg":13.1}}}`})
+	if !e.IdleLatency || e.PingText != "13.10" {
+		t.Errorf("with latency: IdleLatency %v, PingText %q; want true, 13.10", e.IdleLatency, e.PingText)
+	}
+	if e := newStatsEntry(schema.TelemetryData{Ping: "12.40", Extra: `{"server":"Kyiv"}`}); e.IdleLatency || e.PingText != "12.40" {
+		t.Errorf("without latency: IdleLatency %v, PingText %q; want false, 12.40", e.IdleLatency, e.PingText)
+	}
+
 	for _, raw := range []string{`{"server":"Kyiv"}`, `{"latency":42}`, `{"latency":{"idle":{}}}`, `not json`, ``} {
 		if _, ok := parseLatency(raw); ok {
 			t.Errorf("parseLatency(%q) found a latency", raw)
@@ -188,7 +197,8 @@ func TestStatsPage(t *testing.T) {
 
 	rec = get("/stats/", cookies)
 	list := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(list, "stats/?id=01M50T633MHM87DVNWXDTJGHPZ") || !strings.Contains(list, "Example ISP, Ukraine") {
+	if rec.Code != http.StatusOK || !strings.Contains(list, "stats/?id=01M50T633MHM87DVNWXDTJGHPZ") || !strings.Contains(list, "Example ISP, Ukraine") ||
+		!strings.Contains(list, `data-num="12.40"`) {
 		t.Fatalf("list: status %d\n%s", rec.Code, list)
 	}
 
