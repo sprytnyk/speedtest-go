@@ -58,13 +58,14 @@ func (p *Bolt) FetchLast100() ([]schema.TelemetryData, error) {
 		var record schema.TelemetryData
 		bucket := tx.Bucket([]byte(bucketName))
 		if bucket == nil {
-			return errors.New("data bucket doesn't exist yet")
+			// no test stored yet, or all of them deleted
+			return nil
 		}
 
 		cursor := bucket.Cursor()
 		_, b := cursor.Last()
 
-		for len(records) < 100 {
+		for b != nil && len(records) < 100 {
 			if err := json.Unmarshal(b, &record); err != nil {
 				return err
 			}
