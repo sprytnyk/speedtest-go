@@ -36,7 +36,11 @@ type StatsData struct {
 	Single      bool   // a single test is shown in full rather than the list
 	NotFound    bool
 	LoadFailed  bool
-	Data        []StatsEntry
+	// Deleted is the number of tests just deleted, for the notice shown
+	// after a delete; empty when nothing was
+	Deleted      string
+	DeleteFailed bool
+	Data         []StatsEntry
 }
 
 // StatsField is one value of stored JSON, under a readable label. Key, when
@@ -76,6 +80,10 @@ var (
 	//go:embed stats.html
 	statsHTML     string
 	statsTemplate = template.Must(template.New("stats").Parse(statsHTML))
+
+	// rejects deletes posted from other sites, which the SameSite cookie alone
+	// does not cover for sibling subdomains
+	crossOrigin = http.NewCrossOriginProtection()
 )
 
 // initStatsSession configures the stats session cookie. It must run after the
@@ -118,7 +126,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 	_, _ = page.WriteTo(w)
 }
 
-// statsSession handles login and logout and loads the tests to show. It
+// statsSession handles login, logout and deletes, and loads the tests to show. It
 // returns the response status, or done when it has already answered with a
 // redirect.
 func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, data *StatsData) (status int, done bool) {
@@ -157,7 +165,42 @@ func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, d
 	}
 
 	data.LoggedIn = true
+	status = http.StatusOK
 	id := strings.TrimSpace(r.FormValue("id"))
+
+	if op == "delete" || op == "deleteall" {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return 0, true
+		}
+		if err := crossOrigin.Check(r); err != nil {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return 0, true
+		}
+		deleted, err := deleteStats(op, r.PostForm["id"])
+		if err == nil {
+			session.AddFlash(deleted)
+			if err := session.Save(r, w); err != nil {
+				log.Errorf("Error saving stats session: %s", err)
+			}
+			// 303 so that reloading the page does not post the delete again
+			http.Redirect(w, r, statsURL, http.StatusSeeOther)
+			return 0, true
+		}
+		log.Errorf("Error deleting data from database: %s", err)
+		data.DeleteFailed = true
+		status = http.StatusInternalServerError
+		id = "" // show the list again
+	} else if flashes := session.Flashes(); len(flashes) > 0 {
+		if deleted, ok := flashes[0].(int64); ok {
+			data.Deleted = strconv.FormatInt(deleted, 10)
+		}
+		if err := session.Save(r, w); err != nil {
+			log.Errorf("Error saving stats session: %s", err)
+		}
+	}
+
 	if id == "" || id == "L100" {
 		stats, err := database.DB.FetchLast100()
 		if err != nil {
@@ -168,7 +211,7 @@ func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, d
 		for _, stat := range stats {
 			data.Data = append(data.Data, newStatsEntry(stat))
 		}
-		return http.StatusOK, false
+		return status, false
 	}
 
 	data.Query = id
@@ -181,6 +224,24 @@ func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, d
 	data.Single = true
 	data.Data = append(data.Data, newStatsEntry(*stat))
 	return http.StatusOK, false
+}
+
+// deleteStats deletes every stored test for deleteall, or the tests with the
+// given IDs for delete.
+func deleteStats(op string, ids []string) (int64, error) {
+	if op == "deleteall" {
+		return database.DB.DeleteAll()
+	}
+	var uuids []string
+	for _, id := range ids {
+		if id = strings.TrimSpace(id); id != "" {
+			uuids = append(uuids, id)
+		}
+	}
+	if len(uuids) == 0 {
+		return 0, nil
+	}
+	return database.DB.DeleteByUUIDs(uuids)
 }
 
 func newStatsEntry(t schema.TelemetryData) StatsEntry {

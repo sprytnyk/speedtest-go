@@ -193,6 +193,81 @@ func TestStatsPage(t *testing.T) {
 	}
 }
 
+func TestStatsDelete(t *testing.T) {
+	loadTestConfig(t, "database_type=\"memory\"\nstatistics_password=\"secret\"\n")
+	database.DB = memory.Open("")
+	ids := []string{"01M50T633MHM87DVNWXDTJGHP1", "01M50T633MHM87DVNWXDTJGHP2", "01M50T633MHM87DVNWXDTJGHP3", "01M50T633MHM87DVNWXDTJGHP4"}
+	for _, id := range ids {
+		if err := database.DB.Insert(&schema.TelemetryData{UUID: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	do := func(method, target string, form url.Values, cookies []*http.Cookie, header http.Header) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, target, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		for k, v := range header {
+			req.Header[k] = v
+		}
+		for _, c := range cookies {
+			req.AddCookie(c)
+		}
+		rec := httptest.NewRecorder()
+		Stats(rec, req)
+		return rec
+	}
+	stored := func() []string {
+		stats, err := database.DB.FetchLast100()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, s := range stats {
+			got = append(got, s.UUID)
+		}
+		return got
+	}
+
+	rec := do(http.MethodPost, "/stats/?op=login", url.Values{"password": {"secret"}}, nil, nil)
+	cookies := rec.Result().Cookies()
+
+	// not signed in, a delete only shows the login form
+	if rec := do(http.MethodPost, "/stats/", url.Values{"op": {"deleteall"}}, nil, nil); rec.Code != http.StatusOK || len(stored()) != 4 {
+		t.Fatalf("delete without a session: status %d, %d tests left", rec.Code, len(stored()))
+	}
+	if rec := do(http.MethodGet, "/stats/?op=delete&id="+ids[0], nil, cookies, nil); rec.Code != http.StatusMethodNotAllowed || len(stored()) != 4 {
+		t.Fatalf("delete with GET: status %d, %d tests left", rec.Code, len(stored()))
+	}
+	crossSite := http.Header{"Sec-Fetch-Site": {"cross-site"}}
+	if rec := do(http.MethodPost, "/stats/", url.Values{"op": {"deleteall"}}, cookies, crossSite); rec.Code != http.StatusForbidden || len(stored()) != 4 {
+		t.Fatalf("cross-site delete: status %d, %d tests left", rec.Code, len(stored()))
+	}
+
+	rec = do(http.MethodPost, "/stats/", url.Values{"op": {"delete"}, "id": {ids[1], ids[3], "unknown"}}, cookies, nil)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("delete selected: status %d", rec.Code)
+	}
+	if got, want := stored(), []string{ids[2], ids[0]}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("after deleting selected tests: %v, want %v", got, want)
+	}
+	// the list then says how many were deleted, once
+	afterDelete := rec.Result().Cookies()
+	rec = do(http.MethodGet, "/stats/", nil, afterDelete, nil)
+	if body := rec.Body.String(); !strings.Contains(body, `data-num="2">2</span>`) || strings.Contains(body, ids[1]) || !strings.Contains(body, ids[0]) {
+		t.Fatalf("list after delete: status %d\n%s", rec.Code, body)
+	}
+	if rec := do(http.MethodGet, "/stats/", nil, rec.Result().Cookies(), nil); strings.Contains(rec.Body.String(), "Deleted tests:") {
+		t.Error("the delete notice is shown again")
+	}
+
+	if rec := do(http.MethodPost, "/stats/", url.Values{"op": {"deleteall"}}, cookies, nil); rec.Code != http.StatusSeeOther || len(stored()) != 0 {
+		t.Fatalf("delete all: status %d, %d tests left", rec.Code, len(stored()))
+	}
+	if rec := do(http.MethodGet, "/stats/", nil, cookies, nil); !strings.Contains(rec.Body.String(), "No tests have been recorded yet.") {
+		t.Errorf("list after delete all: status %d", rec.Code)
+	}
+}
+
 func TestStatsPageLocked(t *testing.T) {
 	for _, password := range []string{`"PASSWORD"`, `""`} {
 		loadTestConfig(t, "database_type=\"memory\"\nstatistics_password="+password+"\n")
