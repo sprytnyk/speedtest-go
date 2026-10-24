@@ -550,12 +550,21 @@
       th.num,
       td.num {
         text-align: right;
+      }
+
+      /* long headings, like the Ukrainian idle latency, wrap rather than widen the table past the card */
+      th.num {
+        white-space: normal;
+      }
+
+      th .unit {
         white-space: nowrap;
       }
 
       td.num {
         color: var(--text-strong);
         font-weight: 500;
+        white-space: nowrap;
       }
 
       td.time {
@@ -651,9 +660,8 @@
         font-size: 0.8125rem;
         font-weight: 500;
         color: var(--text-muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
       }
 
       .stat-value {
