@@ -292,6 +292,73 @@
         cursor: not-allowed;
       }
 
+      /* where supported, the open list is drawn in the page's style too; other browsers keep their own list */
+      @supports (appearance: base-select) {
+        select,
+        ::picker(select) {
+          appearance: base-select;
+        }
+
+        select {
+          overflow: hidden;
+        }
+
+        /* the closed select shows a copy of the chosen option, cut with an ellipsis when it doesn't fit */
+        select > button {
+          all: unset;
+          display: contents;
+        }
+
+        selectedcontent {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        /* the chevron is the background image above */
+        select::picker-icon {
+          display: none;
+        }
+
+        select:open {
+          border-color: #475569;
+        }
+
+        ::picker(select) {
+          margin-top: 0.375rem;
+          padding: 0.375rem;
+          background-color: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 0.75rem;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+          color: var(--text);
+        }
+
+        option {
+          padding: 0.5rem 0.75rem;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          transition: background-color 0.15s ease;
+        }
+
+        option:hover,
+        option:focus-visible {
+          background-color: var(--raised-hover);
+          color: var(--text-strong);
+          outline: none;
+        }
+
+        option:checked {
+          color: var(--text-strong);
+          font-weight: 600;
+        }
+
+        option::checkmark {
+          color: var(--link);
+        }
+      }
+
       /* a single server is shown, not chosen */
       select.single:disabled {
         color: var(--text-strong);
@@ -999,6 +1066,7 @@
           <div class="field">
             <label for="server" data-i18n="field.server">Server</label>
             <select id="server" disabled>
+              <button><selectedcontent></selectedcontent></button>
               <option value="" data-i18n="server.findingBest">Finding the best server…</option>
             </select>
             <p class="sponsor" id="sponsor" hidden></p>

@@ -56,8 +56,11 @@ const $ = (id) => document.getElementById(id);
 
 // Bootstrap the application when the DOM is ready
 window.addEventListener("DOMContentLoaded", () => {
+  // the translations were just applied, so redo the select's copy of the chosen option
+  refreshServerSelect();
   I18N.onChange(() => {
     testState.dirty = true;
+    refreshServerSelect();
     try {
       showSponsor(testState.speedtest.getSelectedServer());
     } catch (e) {
@@ -276,13 +279,24 @@ async function applyServerListJSON() {
 }
 
 /**
+ * Redo the closed select's copy of the chosen option, which doesn't follow a change to the option's text
+ */
+function refreshServerSelect() {
+  const select = $("server");
+  const index = select.selectedIndex;
+  select.selectedIndex = -1;
+  select.selectedIndex = index;
+}
+
+/**
  * Fill the server dropdown
  * @param {Array} servers - an array of server objects
  * @param {Object|null} selected - the server to show as selected
  */
 function populateDropdown(servers, selected) {
   const select = $("server");
-  select.innerHTML = "";
+  // remove the options but keep the select's button
+  while (select.options.length > 0) select.remove(0);
 
   if (!selected) {
     const placeholder = document.createElement("option");
