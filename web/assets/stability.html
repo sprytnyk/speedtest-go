@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Measure latency, jitter and failed requests over time." />
+    <meta name="description" content="Measure latency, jitter and failed requests over time, idle or under load." />
     <meta name="theme-color" content="#0f172a" />
     <link rel="icon" href="images/favicon.svg" />
     <title data-i18n="stab.title">LibreSpeed - Stability Test</title>
@@ -33,6 +33,10 @@
         --bad: #fb7185;
         --series: #3b82f6;
         --failed: #f43f5e;
+        /* load test phases, download and upload as on the main page */
+        --idle: #cbd5e1;
+        --download: #3b82f6;
+        --upload: #f59e0b;
       }
 
       *,
@@ -97,14 +101,17 @@
       .results {
         order: 2;
       }
-      .chart-card {
+      .load-card {
         order: 3;
       }
-      .options {
+      .chart-card {
         order: 4;
       }
-      .footer {
+      .options {
         order: 5;
+      }
+      .footer {
+        order: 6;
       }
 
       .topbar {
@@ -453,6 +460,18 @@
         transition: width 0.2s linear;
       }
 
+      .progress-bar.idle {
+        background-color: var(--idle);
+      }
+
+      .progress-bar.download {
+        background-color: var(--download);
+      }
+
+      .progress-bar.upload {
+        background-color: var(--upload);
+      }
+
       /* Verdict */
 
       .verdict {
@@ -629,6 +648,92 @@
         margin-left: 0.125rem;
       }
 
+      /* Latency under load: one row per phase */
+
+      .phase-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .phase-table th,
+      .phase-table td {
+        padding: 0.5rem 0.75rem;
+        text-align: right;
+        white-space: nowrap;
+        vertical-align: top;
+      }
+
+      .phase-table th:first-child {
+        text-align: left;
+        white-space: normal;
+      }
+
+      .phase-table th:last-child,
+      .phase-table td:last-child {
+        padding-right: 0;
+      }
+
+      .phase-table thead th {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .phase-table tbody th {
+        font-weight: 600;
+        color: var(--text-strong);
+      }
+
+      .phase-table tbody tr {
+        --phase: var(--idle);
+      }
+
+      .phase-table tbody tr[data-phase="download"] {
+        --phase: var(--download);
+      }
+
+      .phase-table tbody tr[data-phase="upload"] {
+        --phase: var(--upload);
+      }
+
+      .phase-table tbody th::before {
+        content: "";
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 50%;
+        background-color: var(--phase);
+        margin-right: 0.5rem;
+        vertical-align: 0.0625rem;
+      }
+
+      .phase-table tbody td {
+        color: var(--text-strong);
+      }
+
+      .phase-table tbody tr + tr > * {
+        border-top: 1px solid var(--border);
+      }
+
+      /* the phase that is running now */
+      .phase-table tbody tr[aria-current] > * {
+        background-color: var(--raised);
+      }
+
+      .phase-table tbody tr[aria-current] > th {
+        box-shadow: inset 3px 0 0 var(--phase);
+      }
+
+      .cell-unit {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-left: 0.125rem;
+      }
+
       /* Chart */
 
       .chart-tools {
@@ -677,6 +782,18 @@
         border-top: 2px dashed var(--text-muted);
       }
 
+      .swatch.line.idle {
+        background-color: var(--idle);
+      }
+
+      .swatch.line.download {
+        background-color: var(--download);
+      }
+
+      .swatch.line.upload {
+        background-color: var(--upload);
+      }
+
       .chart {
         position: relative;
       }
@@ -686,6 +803,31 @@
         width: 100%;
         height: 260px;
         touch-action: pan-y;
+      }
+
+      /* phase names over the chart, in HTML so they render as sharp as the key */
+      .phase-label {
+        position: absolute;
+        top: 0;
+        left: 0;
+        visibility: hidden;
+        pointer-events: none;
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .phase-label.idle {
+        color: var(--idle);
+      }
+
+      .phase-label.download {
+        color: #60a5fa;
+      }
+
+      .phase-label.upload {
+        color: #fbbf24;
       }
 
       .tooltip {
@@ -798,6 +940,7 @@
         .fields {
           grid-template-columns: 1fr 1fr;
         }
+        #targetArea,
         #serverArea {
           grid-column: 1 / -1;
         }
@@ -853,6 +996,17 @@
         .key {
           order: 1;
           flex-basis: 100%;
+        }
+      }
+
+      @media screen and (max-width: 480px) {
+        .phase-table .col-range {
+          display: none;
+        }
+        .phase-table th,
+        .phase-table td {
+          padding-left: 0.5rem;
+          padding-right: 0.5rem;
         }
       }
 
@@ -912,7 +1066,7 @@
           </div>
           <div>
             <h1 data-i18n="stab.heading">Stability Test</h1>
-            <p class="subtitle" data-i18n="stab.subtitle">Measure latency, jitter and failed requests over time.</p>
+            <p class="subtitle" data-i18n="stab.subtitle">Measure latency, jitter and failed requests over time, idle or under load.</p>
           </div>
         </div>
         <div class="topbar-actions">
@@ -959,6 +1113,14 @@
               </select>
             </div>
             <div class="field">
+              <label for="loadSelect" data-i18n="stab.load">Load</label>
+              <select id="loadSelect">
+                <button><selectedcontent></selectedcontent></button>
+                <option value="" data-i18n="stab.load.none">Idle</option>
+                <option value="updown" data-i18n="stab.load.updown">Download and upload</option>
+              </select>
+            </div>
+            <div class="field" id="targetArea">
               <label for="targetSelect" data-i18n="stab.target">Ping target</label>
               <select id="targetSelect">
                 <button><selectedcontent></selectedcontent></button>
@@ -1088,6 +1250,49 @@
           </div>
         </section>
 
+        <section class="card load-card animate-fade-in" id="loadCard" aria-label="Latency under load" data-i18n-attr="aria-label:stab.load.title" hidden>
+          <div class="card-head">
+            <div>
+              <h2 class="card-title" data-i18n="stab.load.title">Latency under load</h2>
+              <p class="card-note" data-i18n="stab.load.note">Idle, then downloading, then uploading, a third of the test each.</p>
+            </div>
+          </div>
+          <table class="phase-table">
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="stab.phase">Phase</th>
+                <th scope="col" data-i18n="stab.speed">Speed</th>
+                <th scope="col" data-i18n="stab.latency">Latency</th>
+                <th scope="col" data-i18n="stab.jitter">Jitter</th>
+                <th scope="col" class="col-range" data-i18n="stab.range">Low–high</th>
+              </tr>
+            </thead>
+            <tbody id="phaseRows">
+              <tr data-phase="idle">
+                <th scope="row" data-i18n="stab.phase.idle">Idle</th>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td class="col-range"></td>
+              </tr>
+              <tr data-phase="download">
+                <th scope="row" data-i18n="stab.phase.download">Download</th>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td class="col-range"></td>
+              </tr>
+              <tr data-phase="upload">
+                <th scope="row" data-i18n="stab.phase.upload">Upload</th>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td class="col-range"></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
         <section class="card chart-card animate-fade-in" aria-label="Latency chart" data-i18n-attr="aria-label:stab.aria.chart">
           <div class="card-head">
             <div>
@@ -1096,7 +1301,10 @@
             </div>
             <div class="chart-tools">
               <ul class="key">
-                <li><span class="swatch line"></span><span data-i18n="stab.latency">Latency</span></li>
+                <li id="latencyKey"><span class="swatch line"></span><span data-i18n="stab.latency">Latency</span></li>
+                <li class="load-key" hidden><span class="swatch line idle"></span><span data-i18n="stab.phase.idle">Idle</span></li>
+                <li class="load-key" hidden><span class="swatch line download"></span><span data-i18n="stab.phase.download">Download</span></li>
+                <li class="load-key" hidden><span class="swatch line upload"></span><span data-i18n="stab.phase.upload">Upload</span></li>
                 <li><span class="swatch dot"></span><span data-i18n="stab.key.failed">Failed request</span></li>
                 <li id="thresholdKey" hidden><span class="swatch dash"></span><span data-i18n="stab.threshold">Alert threshold</span></li>
               </ul>
@@ -1112,6 +1320,9 @@
           </div>
           <div class="chart">
             <canvas id="pingChart" role="img" aria-label="Latency over the last 60 seconds" data-i18n-attr="aria-label:stab.chart.aria"></canvas>
+            <span class="phase-label idle" id="phaseLabel0" aria-hidden="true" data-i18n="stab.phase.idle">Idle</span>
+            <span class="phase-label download" id="phaseLabel1" aria-hidden="true" data-i18n="stab.phase.download">Download</span>
+            <span class="phase-label upload" id="phaseLabel2" aria-hidden="true" data-i18n="stab.phase.upload">Upload</span>
             <div class="tooltip" id="chartTooltip" hidden><span id="tooltipTime"></span><strong id="tooltipValue"></strong></div>
           </div>
         </section>
@@ -1142,17 +1353,45 @@
       var hoverX = null; // pointer position over the chart, in CSS pixels
       var dirty = true; // redraw on the next animation frame
 
+      // Load test: idle, then download, then upload, each a third of the duration
+      var PHASES = ["idle", "download", "upload"];
+      var loadTest = false; // the running or last test has a load
+      var loadWorker = null; // speedtest_worker.js running the download or upload
+      var loadPhase = 0; // the phase the load worker runs, 0 while idle
+      var loadStartedAt = 0;
+      var phaseSeconds = 0;
+      var phaseTimer = null;
+      var loadSpeeds = []; // Mbps per phase, as reported by the load worker
+
       // Chart colors, validated against the card surface for lightness, contrast and color-blind separation
       var CHART_COLORS = {
-        series: "#3b82f6",
-        seriesFillTop: "rgba(59, 130, 246, 0.28)",
-        seriesFillBottom: "rgba(59, 130, 246, 0)",
         failed: "#f43f5e",
         reference: "#94a3b8",
         grid: "#334155",
         text: "#94a3b8",
         surface: "#1e293b"
       };
+      // latency line per phase of a load test, with download and upload in the main page's colours;
+      // a test without load draws it all in the download blue
+      var SERIES_COLORS = {
+        idle: { line: "#cbd5e1", fill: "rgba(203, 213, 225, 0.18)", fillEnd: "rgba(203, 213, 225, 0)", band: "rgba(203, 213, 225, 0.06)" },
+        download: {
+          line: "#3b82f6",
+          fill: "rgba(59, 130, 246, 0.28)",
+          fillEnd: "rgba(59, 130, 246, 0)",
+          band: "rgba(59, 130, 246, 0.08)"
+        },
+        upload: {
+          line: "#f59e0b",
+          fill: "rgba(245, 158, 11, 0.26)",
+          fillEnd: "rgba(245, 158, 11, 0)",
+          band: "rgba(245, 158, 11, 0.08)"
+        }
+      };
+
+      function seriesStyle(point) {
+        return SERIES_COLORS[loadTest ? PHASES[point.phase] : "download"];
+      }
       var VISIBLE_SECONDS = 60;
       var CHART_PADDING = { left: 40, right: 8, top: 16, bottom: 26 };
 
@@ -1310,6 +1549,8 @@
       }
 
       function canStartTest() {
+        // the load always goes to the speed test server, whatever is pinged
+        if (I("loadSelect").value) return localServerReady;
         return !!I("targetSelect").value || localServerReady;
       }
 
@@ -1341,6 +1582,8 @@
 
         allPingData = [];
         latestData = null;
+        loadSpeeds = [];
+        loadTest = !!I("loadSelect").value;
         resetUI();
 
         running = true;
@@ -1350,12 +1593,16 @@
         startBtn.disabled = false;
         startBtn.textContent = I18N.t("btn.stop");
         I("durationSelect").disabled = true;
+        I("loadSelect").disabled = true;
         I("targetSelect").disabled = true;
         I("server").disabled = true;
 
+        var duration = parseInt(I("durationSelect").value);
+        phaseSeconds = duration / 3;
         var externalTarget = I("targetSelect").value;
         var workerSettings = {
-          duration: parseInt(I("durationSelect").value),
+          // with a load, the page ends the test once the upload is done
+          duration: loadTest ? 0 : duration,
           ping_allowPerformanceApi: true,
           url_ping_external: externalTarget
         };
@@ -1392,14 +1639,87 @@
         };
         updater = setInterval(function () {
           if (worker) worker.postMessage("status");
+          if (loadWorker) {
+            loadWorker.postMessage("status");
+            // don't let a stuck download or upload hold up the test
+            if (new Date().getTime() - loadStartedAt > (phaseSeconds + 15) * 1000) endLoadPhase();
+          }
         }, 200);
         worker.postMessage("start " + JSON.stringify(workerSettings));
+        if (loadTest) {
+          phaseTimer = setTimeout(function () {
+            startLoadPhase(1);
+          }, phaseSeconds * 1000);
+        }
+      }
+
+      // run the download (1) or upload (2) phase with the speed test worker while the pings go on
+      function startLoadPhase(n) {
+        phaseTimer = null;
+        if (!running) return;
+        loadPhase = n;
+        loadStartedAt = new Date().getTime();
+        worker.postMessage("phase " + n);
+
+        var loadSettings = {
+          test_order: n === 1 ? "D" : "U",
+          time_auto: false,
+          // the grace time comes before the measured time, so take it off to keep the phase its length
+          time_dlGraceTime: 1.5,
+          time_ulGraceTime: 3,
+          time_dl_max: phaseSeconds - 1.5,
+          time_ul_max: phaseSeconds - 3,
+          // browsers open at most 6 connections to a server, so leave some free for the pings
+          xhr_dlMultistream: 4
+        };
+        if (selectedServer) {
+          loadSettings.url_dl = joinServerUrl(selectedServer.server, selectedServer.dlURL);
+          loadSettings.url_ul = joinServerUrl(selectedServer.server, selectedServer.ulURL);
+          loadSettings.mpot = true;
+        }
+
+        var currentLoadWorker = new Worker("speedtest_worker.js?r=" + Math.random());
+        loadWorker = currentLoadWorker;
+        loadWorker.onmessage = function (e) {
+          if (loadWorker !== currentLoadWorker) return;
+          var data = JSON.parse(e.data);
+          loadSpeeds[n] = n === 1 ? data.dlStatus : data.ulStatus;
+          if (data.testState >= 4) endLoadPhase();
+          dirty = true;
+        };
+        loadWorker.postMessage("start " + JSON.stringify(loadSettings));
+        dirty = true;
+      }
+
+      // move on to the upload after the download, and end the test after the upload
+      function endLoadPhase() {
+        var ended = loadPhase;
+        stopLoadWorker();
+        if (!running) return;
+        if (ended === 1) startLoadPhase(2);
+        else if (worker) worker.postMessage("finish");
+      }
+
+      function stopLoadWorker() {
+        if (loadWorker) {
+          try {
+            loadWorker.terminate();
+          } catch (e) {}
+          loadWorker = null;
+        }
+        loadPhase = 0;
       }
 
       function stopTest() {
         running = false;
+        if (phaseTimer) {
+          clearTimeout(phaseTimer);
+          phaseTimer = null;
+        }
+        stopLoadWorker();
         if (allPingData.length === 0) setIdleVerdict("status.stopped", "stab.stoppedText");
         I("durationSelect").disabled = false;
+        I("loadSelect").disabled = false;
         I("targetSelect").disabled = false;
         I("server").disabled = false;
         updateStartButtonState();
@@ -1429,6 +1749,8 @@
         }
         allPingData = [];
         latestData = null;
+        loadSpeeds = [];
+        loadTest = false;
         resetUI();
         dirty = true;
       }
@@ -1439,6 +1761,17 @@
         setIdleVerdict("status.ready", "stab.readyText");
         I("downloadCsvBtn").disabled = true;
         setProgress(0, 0, parseInt(I("durationSelect").value));
+        I("progressBar").className = "progress-bar";
+        updateLoadCard();
+        updatePhaseTable(null);
+      }
+
+      // the phase table shows while a load is picked or a load test has results; the chart key only with results
+      function updateLoadCard() {
+        I("loadCard").hidden = !I("loadSelect").value && !loadTest;
+        I("latencyKey").hidden = loadTest;
+        var keys = document.querySelectorAll(".load-key");
+        for (var i = 0; i < keys.length; i++) keys[i].hidden = !loadTest;
       }
 
       // Format helpers
@@ -1461,6 +1794,22 @@
         if (avg < 60 && jit < 15 && loss < 2) return { text: "Good", cls: "good" };
         if (avg < 100 && jit < 30 && loss < 5) return { text: "Poor", cls: "poor" };
         return { text: "Bad", cls: "bad" };
+      }
+
+      // the highest value of a field across the phases, so a load test is rated by its worst phase
+      function worstOf(phases, key) {
+        var v = 0;
+        for (var i = 0; i < phases.length; i++) v = Math.max(v, phases[i][key]);
+        return v;
+      }
+
+      function received(p) {
+        return !!p && p.samples > p.failed;
+      }
+
+      function fmtDelta(v) {
+        var a = Math.abs(v);
+        return (v < 0 ? "−" : "+") + I18N.num(a, a < 10 ? 1 : 0);
       }
 
       // verdict box style for each rating; the title always names the rating, so it never relies on color alone
@@ -1486,7 +1835,10 @@
           return;
         }
         idleVerdict = null;
-        var r = getRating(d.avgPing, d.jitter, d.packetLoss);
+        var ph = d.phases;
+        var r = loadTest
+          ? getRating(worstOf(ph, "avg"), worstOf(ph, "jitter"), worstOf(ph, "loss"))
+          : getRating(d.avgPing, d.jitter, d.packetLoss);
         var title, text;
         if (r.cls === "none") {
           // every request so far has failed
@@ -1495,7 +1847,14 @@
           text = I18N.t("stab.noResponsesText");
         } else {
           title = I18N.t("stab.rating." + r.cls);
-          text = I18N.t("stab.summary", { avg: fmt(d.avgPing), jitter: fmt(d.jitter), loss: I18N.num(d.packetLoss, 1) });
+          if (loadTest && received(ph[0]) && received(ph[1])) {
+            // how much the load adds to the idle latency
+            var deltas = { dl: fmtDelta(ph[1].avg - ph[0].avg) };
+            if (received(ph[2])) deltas.ul = fmtDelta(ph[2].avg - ph[0].avg);
+            text = I18N.t(deltas.ul ? "stab.loadSummary" : "stab.loadSummary.download", deltas);
+          } else {
+            text = I18N.t("stab.summary", { avg: fmt(d.avgPing), jitter: fmt(d.jitter), loss: I18N.num(d.packetLoss, 1) });
+          }
         }
         setVerdict(VERDICT_STYLES[r.cls], title, text);
       }
@@ -1525,8 +1884,41 @@
         setStat("statJitter", fmt(d.jitter));
         setStat("statLoss", d.totalSamples > 0 ? I18N.num(d.packetLoss, 1) : "--");
         setStat("statSamples", d.totalSamples > 0 ? String(d.totalSamples) : "--");
-        setProgress(d.progress, d.elapsed, d.duration);
+        if (loadTest) {
+          // the worker has no fixed end with a load, so follow the clock until it finishes
+          setProgress(d.testState === 4 ? 1 : d.elapsed / (phaseSeconds * 3), d.elapsed, phaseSeconds * 3);
+          I("progressBar").className = "progress-bar " + PHASES[d.phase];
+        } else {
+          setProgress(d.progress, d.elapsed, d.duration);
+        }
+        updatePhaseTable(d);
         showVerdict(d);
+      }
+
+      // a table value with its unit, which is left out while there is no value
+      function setCell(cell, text, unit) {
+        cell.textContent = text;
+        if (text === "--") return;
+        var u = document.createElement("span");
+        u.className = "cell-unit";
+        u.textContent = unit;
+        cell.appendChild(u);
+      }
+
+      // one row per phase: speed from the load worker, latency from the pings made during that phase
+      function updatePhaseTable(d) {
+        var rows = I("phaseRows").rows;
+        for (var n = 0; n < rows.length; n++) {
+          var p = d && d.phases ? d.phases[n] : null;
+          var got = received(p);
+          var cells = rows[n].cells;
+          setCell(cells[1], fmt(loadSpeeds[n]), I18N.t("unit.mbps"));
+          setCell(cells[2], got ? fmt(p.avg) : "--", I18N.t("unit.ms"));
+          setCell(cells[3], got ? fmt(p.jitter) : "--", I18N.t("unit.ms"));
+          setCell(cells[4], got ? fmt(p.min) + "–" + fmt(p.max) : "--", I18N.t("unit.ms"));
+          if (running && loadTest && d && d.phase === n) rows[n].setAttribute("aria-current", "step");
+          else rows[n].removeAttribute("aria-current");
+        }
       }
 
       // Canvas chart rendering, drawn in CSS pixels
@@ -1587,8 +1979,43 @@
           return baseY - (v / yMax) * plotH;
         }
 
-        ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+        ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
         ctx.lineWidth = 1;
+
+        // shade each phase of a load test, with a line where download and upload start and the phase name at the top
+        var runStart = 0;
+        var labelSpots = []; // per phase: where its name starts and how much room it has
+        for (var i = 1; i <= data.length; i++) {
+          if (i < data.length && data[i].phase === data[runStart].phase) continue;
+          if (loadTest) {
+            var bandX = xFor(data[runStart].t);
+            var bx0 = Math.max(padL, bandX);
+            var bx1 = Math.min(padL + plotW, xFor(i < data.length ? data[i].t : maxTime));
+            // the running phase may label into the empty space ahead of it, so its name shows from the start
+            var labelEnd = i < data.length ? bx1 : padL + plotW;
+            if (labelEnd > bx0) {
+              var bandStyle = SERIES_COLORS[PHASES[data[runStart].phase]];
+              ctx.fillStyle = bandStyle.band;
+              ctx.fillRect(bx0, padT, bx1 - bx0, plotH);
+              if (data[runStart].phase > 0 && bandX >= padL) {
+                ctx.strokeStyle = CHART_COLORS.grid;
+                ctx.beginPath();
+                ctx.moveTo(Math.round(bandX) + 0.5, padT);
+                ctx.lineTo(Math.round(bandX) + 0.5, baseY);
+                ctx.stroke();
+              }
+              labelSpots[data[runStart].phase] = { x: bx0 + 6, room: labelEnd - bx0 };
+            }
+          }
+          runStart = i;
+        }
+        for (var n = 0; n < PHASES.length; n++) {
+          var phaseLabel = I("phaseLabel" + n);
+          var spot = labelSpots[n];
+          phaseLabel.style.left = (spot ? Math.round(spot.x) : 0) + "px";
+          phaseLabel.style.top = padT + 4 + "px";
+          phaseLabel.style.visibility = spot && phaseLabel.offsetWidth + 12 <= spot.room ? "visible" : "hidden";
+        }
 
         // horizontal grid lines with value labels
         var ySteps = [0].concat(getYSteps(yMax));
@@ -1650,52 +2077,75 @@
           return;
         }
 
-        // area under the line
-        var gradient = ctx.createLinearGradient(0, padT, 0, baseY);
-        gradient.addColorStop(0, CHART_COLORS.seriesFillTop);
-        gradient.addColorStop(1, CHART_COLORS.seriesFillBottom);
-        ctx.beginPath();
-        var firstX = null,
-          lastX = null;
-        for (var i = 0; i < visible.length; i++) {
-          if (visible[i].lost) continue;
-          var px = xFor(visible[i].t);
-          if (firstX === null) {
-            ctx.moveTo(px, baseY);
-            firstX = px;
-          }
-          ctx.lineTo(px, yFor(visible[i].ping));
-          lastX = px;
-        }
-        if (firstX !== null) {
-          ctx.lineTo(lastX, baseY);
-          ctx.closePath();
-          ctx.fillStyle = gradient;
-          ctx.fill();
-        }
-
-        // latency line, broken at failed requests
-        ctx.beginPath();
-        var started = false;
+        // split the samples into runs of one colour, each starting at the previous run's last sample so they join up
+        var runs = [];
+        var run = null;
+        var prevPoint = null;
         for (var i = 0; i < visible.length; i++) {
           if (visible[i].lost) {
-            started = false;
+            if (run) run.points.push(visible[i]);
+            prevPoint = null;
             continue;
           }
-          var px = xFor(visible[i].t);
-          var py = yFor(visible[i].ping);
-          if (!started) {
-            ctx.moveTo(px, py);
-            started = true;
-          } else {
-            ctx.lineTo(px, py);
+          var style = seriesStyle(visible[i]);
+          if (!run || run.style !== style) {
+            run = { style: style, points: prevPoint ? [prevPoint] : [] };
+            runs.push(run);
           }
+          run.points.push(visible[i]);
+          prevPoint = visible[i];
         }
-        ctx.strokeStyle = CHART_COLORS.series;
-        ctx.lineWidth = 2;
-        ctx.lineJoin = "round";
-        ctx.lineCap = "round";
-        ctx.stroke();
+
+        for (var r = 0; r < runs.length; r++) {
+          var pts = runs[r].points;
+
+          // area under the line
+          var gradient = ctx.createLinearGradient(0, padT, 0, baseY);
+          gradient.addColorStop(0, runs[r].style.fill);
+          gradient.addColorStop(1, runs[r].style.fillEnd);
+          ctx.beginPath();
+          var firstX = null,
+            lastX = null;
+          for (var i = 0; i < pts.length; i++) {
+            if (pts[i].lost) continue;
+            var px = xFor(pts[i].t);
+            if (firstX === null) {
+              ctx.moveTo(px, baseY);
+              firstX = px;
+            }
+            ctx.lineTo(px, yFor(pts[i].ping));
+            lastX = px;
+          }
+          if (firstX !== null) {
+            ctx.lineTo(lastX, baseY);
+            ctx.closePath();
+            ctx.fillStyle = gradient;
+            ctx.fill();
+          }
+
+          // latency line, broken at failed requests
+          ctx.beginPath();
+          var started = false;
+          for (var i = 0; i < pts.length; i++) {
+            if (pts[i].lost) {
+              started = false;
+              continue;
+            }
+            var px = xFor(pts[i].t);
+            var py = yFor(pts[i].ping);
+            if (!started) {
+              ctx.moveTo(px, py);
+              started = true;
+            } else {
+              ctx.lineTo(px, py);
+            }
+          }
+          ctx.strokeStyle = runs[r].style.line;
+          ctx.lineWidth = 2;
+          ctx.lineJoin = "round";
+          ctx.lineCap = "round";
+          ctx.stroke();
+        }
 
         // failed request markers along the baseline
         for (var i = 0; i < visible.length; i++) {
@@ -1720,9 +2170,9 @@
         ctx.moveTo(Math.round(nx) + 0.5, padT);
         ctx.lineTo(Math.round(nx) + 0.5, baseY);
         ctx.stroke();
-        drawMarker(ctx, nx, ny, nearest.lost ? CHART_COLORS.failed : CHART_COLORS.series);
+        drawMarker(ctx, nx, ny, nearest.lost ? CHART_COLORS.failed : seriesStyle(nearest).line);
 
-        I("tooltipTime").textContent = fmtTime(nearest.t);
+        I("tooltipTime").textContent = fmtTime(nearest.t) + (loadTest ? " · " + I18N.t("stab.phase." + PHASES[nearest.phase]) : "");
         I("tooltipValue").textContent = nearest.lost ? I18N.t("stab.tooltipFailed") : fmt(nearest.ping) + " " + I18N.t("unit.ms");
         tooltip.hidden = false;
         var half = tooltip.offsetWidth / 2;
@@ -1792,10 +2242,10 @@
       // CSV download
       function downloadCsv() {
         if (allPingData.length === 0) return;
-        var csv = "elapsed_s,ping_ms,failed\n";
+        var csv = "elapsed_s,ping_ms,failed,phase\n";
         for (var i = 0; i < allPingData.length; i++) {
           var d = allPingData[i];
-          csv += d.t.toFixed(3) + "," + d.ping.toFixed(2) + "," + (d.lost ? "1" : "0") + "\n";
+          csv += d.t.toFixed(3) + "," + d.ping.toFixed(2) + "," + (d.lost ? "1" : "0") + "," + PHASES[d.phase] + "\n";
         }
         var blob = new Blob([csv], { type: "text/csv" });
         var url = URL.createObjectURL(blob);
@@ -1813,6 +2263,10 @@
       I("resetBtn").addEventListener("click", resetTest);
       I("downloadCsvBtn").addEventListener("click", downloadCsv);
       I("targetSelect").addEventListener("change", updateStartButtonState);
+      I("loadSelect").addEventListener("change", function () {
+        updateStartButtonState();
+        updateLoadCard();
+      });
       I("server").addEventListener("change", function () {
         onServerChange(this.value);
       });
@@ -1859,6 +2313,7 @@
         updateThreshold(I("alertThreshold").value);
         if (idleVerdict) setIdleVerdict(idleVerdict[0], idleVerdict[1]);
         else if (latestData) showVerdict(latestData);
+        dirty = true; // units in the phase table and phase names on the chart
         refreshSelects();
       });
       // the translations are applied once the page has loaded

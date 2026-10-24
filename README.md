@@ -30,7 +30,7 @@ This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedt
 * Download and upload speed, ping and jitter, with a live speed chart
 * IP address, ISP and country of the client
 * Connection stability test (`/stability.html`): latency over time, jitter, failed requests, an alert threshold and
-  CSV export
+  CSV export, idle or under load (idle, then download, then upload, with latency for each phase)
 * Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
 * Multiple test servers to choose from
 * English and Ukrainian, picked from the browser's language or a switch on every page

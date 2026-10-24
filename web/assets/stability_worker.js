@@ -7,24 +7,21 @@
 // data reported to main thread
 let testState = -1; // -1=idle, 0=starting, 1=running, 4=finished, 5=aborted
 let currentPing = 0;
-let avgPing = 0;
-let minPing = -1;
-let maxPing = 0;
-let jitter = 0;
-let packetLoss = 0; // failed request percentage
 let elapsed = 0;
 let progress = 0;
 
-let pingData = []; // all ping data points {t: elapsedMs, ping: ms, lost: bool}
+// latency over the whole test, and per phase (0=idle, 1=download, 2=upload) when the page runs a load alongside
+let overall = newStats();
+let phase = 0;
+let phases = [newStats()];
+
+let pingData = []; // all ping data points {t: elapsedMs, ping: ms, lost: bool, phase: n}
 let lastReportedIndex = 0; // for delta delivery
-let totalSamples = 0;
-let failedSamples = 0;
-let pingSum = 0;
 
 let settings = {
   url_ping: "backend/empty.php",
   url_ping_external: "", // external URL to ping (uses fetch no-cors, e.g. "https://www.google.com/generate_204")
-  duration: 60, // seconds
+  duration: 60, // seconds, 0 runs until the page sends "finish"
   ping_interval: 200, // minimum ms between pings to limit sample rate
   ping_timeout: 5000,
   ping_allowPerformanceApi: true,
@@ -40,6 +37,41 @@ function url_sep(url) {
   return url.match(/\?/) ? "&" : "?";
 }
 
+function newStats() {
+  return { samples: 0, failed: 0, sum: 0, avg: 0, min: -1, max: 0, jitter: 0, loss: 0, prev: 0 };
+}
+
+function addPing(s, ms) {
+  s.samples++;
+  s.sum += ms;
+  const received = s.samples - s.failed;
+  s.avg = parseFloat((s.sum / received).toFixed(2));
+  if (s.min === -1 || ms < s.min) s.min = ms;
+  if (ms > s.max) s.max = ms;
+
+  // jitter calculation (same weighted formula as speedtest_worker.js)
+  if (received > 1 && s.prev > 0) {
+    const instjitter = Math.abs(ms - s.prev);
+    if (received === 2) {
+      s.jitter = instjitter;
+    } else {
+      s.jitter = instjitter > s.jitter ? s.jitter * 0.3 + instjitter * 0.7 : s.jitter * 0.8 + instjitter * 0.2;
+    }
+  }
+  s.prev = ms;
+  s.loss = parseFloat(((s.failed / s.samples) * 100).toFixed(2));
+}
+
+function addLoss(s) {
+  s.samples++;
+  s.failed++;
+  s.loss = parseFloat(((s.failed / s.samples) * 100).toFixed(2));
+}
+
+function phaseSummary(s) {
+  return { avg: s.avg, min: s.min, max: s.max, jitter: s.jitter, loss: s.loss, samples: s.samples, failed: s.failed };
+}
+
 this.addEventListener("message", function (e) {
   const params = e.data.split(" ");
   if (params[0] === "status") {
@@ -50,17 +82,19 @@ this.addEventListener("message", function (e) {
       JSON.stringify({
         testState: testState,
         currentPing: currentPing,
-        avgPing: avgPing,
-        minPing: minPing,
-        maxPing: maxPing,
-        jitter: jitter,
-        packetLoss: packetLoss,
+        avgPing: overall.avg,
+        minPing: overall.min,
+        maxPing: overall.max,
+        jitter: overall.jitter,
+        packetLoss: overall.loss,
         elapsed: elapsed,
         duration: settings.duration,
         progress: progress,
         pingData: newData,
-        totalSamples: totalSamples,
-        failedSamples: failedSamples
+        totalSamples: overall.samples,
+        failedSamples: overall.failed,
+        phase: phase,
+        phases: phases.map(phaseSummary)
       })
     );
   }
@@ -86,6 +120,22 @@ this.addEventListener("message", function (e) {
     testState = 1;
     doPing();
   }
+  if (params[0] === "phase" && testState === 1) {
+    // later pings are recorded under this phase
+    phase = parseInt(params[1]) || 0;
+    while (phases.length <= phase) phases.push(newStats());
+  }
+  if (params[0] === "finish") {
+    // the page ends a test that has no fixed duration
+    if (testState >= 4) return;
+    testState = 4;
+    progress = 1;
+    if (xhr) {
+      try {
+        xhr.abort();
+      } catch (e) {}
+    }
+  }
   if (params[0] === "abort") {
     if (testState >= 4) return;
     aborted = true;
@@ -102,42 +152,24 @@ function recordPing(instspd) {
   // guard against 0ms pings
   if (instspd < 1) instspd = prevInstspd;
   if (instspd < 1) instspd = 1;
-
-  totalSamples++;
-  currentPing = instspd;
-  pingSum += instspd;
-  avgPing = parseFloat((pingSum / (totalSamples - failedSamples)).toFixed(2));
-
-  if (minPing === -1 || instspd < minPing) minPing = instspd;
-  if (instspd > maxPing) maxPing = instspd;
-
-  // jitter calculation (same weighted formula as speedtest_worker.js)
-  if (totalSamples > 1 && prevInstspd > 0) {
-    const instjitter = Math.abs(instspd - prevInstspd);
-    if (totalSamples === 2) {
-      jitter = instjitter;
-    } else {
-      jitter = instjitter > jitter ? jitter * 0.3 + instjitter * 0.7 : jitter * 0.8 + instjitter * 0.2;
-    }
-  }
   prevInstspd = instspd;
 
-  // failed request percentage
-  packetLoss = totalSamples > 0 ? parseFloat(((failedSamples / totalSamples) * 100).toFixed(2)) : 0;
+  currentPing = instspd;
+  addPing(overall, instspd);
+  addPing(phases[phase], instspd);
 
   // record data point
   const now = new Date().getTime();
   elapsed = (now - startTime) / 1000;
-  pingData.push({ t: elapsed, ping: parseFloat(instspd.toFixed(2)), lost: false });
+  pingData.push({ t: elapsed, ping: parseFloat(instspd.toFixed(2)), lost: false, phase: phase });
 }
 
 function recordLoss() {
   const now = new Date().getTime();
-  totalSamples++;
-  failedSamples++;
-  packetLoss = parseFloat(((failedSamples / totalSamples) * 100).toFixed(2));
+  addLoss(overall);
+  addLoss(phases[phase]);
   elapsed = (now - startTime) / 1000;
-  pingData.push({ t: elapsed, ping: 0, lost: true });
+  pingData.push({ t: elapsed, ping: 0, lost: true, phase: phase });
 }
 
 // pace pings to avoid excessive sample rates on low-latency links
@@ -156,11 +188,13 @@ function doPing() {
   // check if duration exceeded
   const now = new Date().getTime();
   elapsed = (now - startTime) / 1000;
-  progress = Math.min(1, elapsed / settings.duration);
-  if (elapsed >= settings.duration) {
-    testState = 4;
-    progress = 1;
-    return;
+  if (settings.duration > 0) {
+    progress = Math.min(1, elapsed / settings.duration);
+    if (elapsed >= settings.duration) {
+      testState = 4;
+      progress = 1;
+      return;
+    }
   }
 
   // external ping mode: use fetch with no-cors
@@ -215,7 +249,8 @@ function doPing() {
 // ping an external host using fetch with no-cors (opaque response, but timing still works)
 function doPingExternal() {
   const prevT = new Date().getTime();
-  const remainingMs = Math.max(1, settings.duration * 1000 - (prevT - startTime));
+  const remainingMs =
+    settings.duration > 0 ? Math.max(1, settings.duration * 1000 - (prevT - startTime)) : settings.ping_timeout;
   const timeoutMs = Math.min(settings.ping_timeout, remainingMs);
   const url =
     settings.url_ping_external + (settings.url_ping_external.indexOf("?") >= 0 ? "&" : "?") + "r=" + Math.random();
