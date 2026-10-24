@@ -1362,6 +1362,7 @@
       var loadPhase = 0; // the phase the load worker runs, 0 while idle
       var loadStartedAt = 0;
       var phaseSeconds = 0;
+      var testSeconds = 0; // length of the running or last test, which the chart shows in full
       var phaseTimer = null;
       var loadSpeeds = []; // Mbps per phase, as reported by the load worker
 
@@ -1394,7 +1395,7 @@
       function seriesStyle(point) {
         return SERIES_COLORS[loadTest ? PHASES[point.phase] : "download"];
       }
-      var VISIBLE_SECONDS = 60;
+      var DEFAULT_CHART_SECONDS = 60; // the chart's span before a test
       var CHART_PADDING = { left: 40, right: 8, top: 16, bottom: 26 };
 
       function joinServerUrl(server, path) {
@@ -1600,6 +1601,7 @@
         I("server").disabled = true;
 
         var duration = parseInt(I("durationSelect").value);
+        testSeconds = duration;
         phaseSeconds = duration / 3;
         var externalTarget = I("targetSelect").value;
         var workerSettings = {
@@ -1753,6 +1755,7 @@
         latestData = null;
         loadSpeeds = [];
         loadTest = false;
+        testSeconds = 0;
         resetUI();
         dirty = true;
       }
@@ -1943,28 +1946,13 @@
         var plotH = h - padT - CHART_PADDING.bottom;
         var baseY = padT + plotH;
 
-        // determine visible time window
+        // the whole test fits the chart, so the idle phase stays in view while the load runs
         var data = allPingData;
         var maxTime = data.length > 0 ? data[data.length - 1].t : 0;
-        var timeStart, timeEnd;
-        if (maxTime <= VISIBLE_SECONDS) {
-          timeStart = 0;
-          timeEnd = VISIBLE_SECONDS;
-        } else {
-          timeEnd = maxTime;
-          timeStart = maxTime - VISIBLE_SECONDS;
-        }
+        var timeStart = 0;
+        var timeEnd = Math.max(testSeconds || DEFAULT_CHART_SECONDS, maxTime);
         var timeSpan = timeEnd - timeStart;
-
-        // binary search to find first visible data point
-        var lo = 0,
-          hi = data.length - 1;
-        while (lo <= hi) {
-          var mid = (lo + hi) >> 1;
-          if (data[mid].t < timeStart) lo = mid + 1;
-          else hi = mid - 1;
-        }
-        var visible = data.slice(lo);
+        var visible = data;
 
         // Y-axis scale from visible data, kept tall enough to show the alert threshold
         var yMax = 50; // minimum 50ms scale
@@ -2040,7 +2028,7 @@
         ctx.textBaseline = "top";
         // pick the smallest interval whose labels fit without colliding
         var maxLabels = Math.floor(plotW / (ctx.measureText("00:00").width + 24)) + 1;
-        var intervals = [10, 15, 20, 30, 60];
+        var intervals = [10, 15, 20, 30, 60, 120];
         var tickInterval = intervals[intervals.length - 1];
         for (var k = 0; k < intervals.length; k++) {
           if (timeSpan / intervals[k] + 1 <= maxLabels) {
