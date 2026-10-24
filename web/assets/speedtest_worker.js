@@ -11,12 +11,15 @@ let dlStatus = ""; // download speed in megabit/s with 2 decimal digits
 let ulStatus = ""; // upload speed in megabit/s with 2 decimal digits
 let pingStatus = ""; // ping in milliseconds with 2 decimal digits
 let pingAvgStatus = ""; // average of the pings in milliseconds with 2 decimal digits
+let pingHigh = 0; // highest of the pings in milliseconds
 let jitterStatus = ""; // jitter in milliseconds with 2 decimal digits
 let clientIp = ""; // client's IP address as reported by getIP.php
 let dlProgress = 0; //progress of download test 0-1
 let ulProgress = 0; //progress of upload test 0-1
 let pingProgress = 0; //progress of ping+jitter test 0-1
 let testId = null; //test ID (sent back by telemetry if used, null otherwise)
+let loadedLatency = null; // latency the page measured while downloading and uploading, sent with the results
+let latencyArrived = null; // called when the page sends the latency after the tests are done
 
 let log = ""; //telemetry log
 function tlog(s) {
@@ -65,6 +68,7 @@ let settings = {
 	telemetry_level: 0, // 0=disabled, 1=basic (results only), 2=full (results and timing) 3=debug (results+log)
 	url_telemetry: "results/telemetry.php", // path to the script that adds telemetry data to the database
 	telemetry_extra: "", //extra data that can be passed to the telemetry through the settings
+	telemetry_latency: false, // store the latency with the results: the ping test's, and the page's from the download and upload, sent with the latency command
     forceIE11Workaround: false //when set to true, it will force the IE11 upload test on all browsers. Debug only
 };
 
@@ -86,6 +90,8 @@ function url_sep(url) {
 	-abort: aborts the current test
 	-start: starts the test. optionally, settings can be passed as JSON.
 		example: start {"time_ul_max":"10", "time_dl_max":"10", "count_ping":"50"}
+	-latency: the latency the page measured while downloading and uploading, as JSON, sent with the results when telemetry_latency is set
+		example: latency {"download":{"avg":45.6,"jitter":3.2,"low":40.1,"high":60.4}}
 */
 this.addEventListener("message", function(e) {
 	const params = e.data.split(" ");
@@ -181,12 +187,24 @@ this.addEventListener("message", function(e) {
 			if (testState == 5) return;
 			if (test_pointer >= settings.test_order.length) {
 				//test is finished
-				if (settings.telemetry_level > 0)
-					sendTelemetry(function(id) {
-						testState = 4;
-						if (id != null) testId = id;
-					});
-				else testState = 4;
+				if (settings.telemetry_level > 0) {
+					const send = function() {
+						if (testState == 5) return;
+						sendTelemetry(function(id) {
+							testState = 4;
+							if (id != null) testId = id;
+						});
+					};
+					// the page sends the upload's latency a moment after the upload ends, so wait for it, but not forever
+					if (settings.telemetry_latency) {
+						const timer = setTimeout(send, 3000);
+						latencyArrived = function() {
+							clearTimeout(timer);
+							latencyArrived = null;
+							send();
+						};
+					} else send();
+				} else testState = 4;
 				return;
 			}
 			switch (settings.test_order.charAt(test_pointer)) {
@@ -244,6 +262,14 @@ this.addEventListener("message", function(e) {
 			}
 		};
 		runNextTest();
+	}
+	if (params[0] === "latency") {
+		try {
+			loadedLatency = JSON.parse(e.data.substring(8));
+		} catch (e) {
+			twarn("Error parsing latency JSON");
+		}
+		if (latencyArrived) latencyArrived();
 	}
 	if (params[0] === "abort") {
 		// abort command
@@ -633,6 +659,7 @@ function pingTest(done) {
 				pingSum += instspd;
 				pingCount++;
 				pingAvgStatus = (pingSum / pingCount).toFixed(2);
+				if (instspd > pingHigh) pingHigh = instspd;
 				if (i === 1) ping = instspd;
 				/* first ping, can't tell jitter yet*/ else {
 					if (instspd < ping) ping = instspd; // update ping, if the instant ping is lower
@@ -686,6 +713,29 @@ function pingTest(done) {
 	}.bind(this);
 	doPing(); // start first ping
 }
+// the extra data to store, with the latency added when telemetry_latency is set
+function telemetryExtra() {
+	if (!settings.telemetry_latency) return settings.telemetry_extra;
+	const latency = {};
+	const avg = parseFloat(pingAvgStatus);
+	if (avg > 0) {
+		latency.idle = { avg: avg, jitter: parseFloat(jitterStatus), low: parseFloat(pingStatus), high: parseFloat(pingHigh.toFixed(2)) };
+	}
+	if (loadedLatency && typeof loadedLatency === "object") {
+		if (loadedLatency.download) latency.download = loadedLatency.download;
+		if (loadedLatency.upload) latency.upload = loadedLatency.upload;
+	}
+	if (Object.keys(latency).length === 0) return settings.telemetry_extra;
+	let extra = null;
+	try {
+		extra = JSON.parse(settings.telemetry_extra);
+	} catch (e) {}
+	if (!extra || typeof extra !== "object" || Array.isArray(extra)) {
+		extra = settings.telemetry_extra ? { extra: settings.telemetry_extra } : {};
+	}
+	extra.latency = latency;
+	return JSON.stringify(extra);
+}
 // telemetry
 function sendTelemetry(done) {
 	if (settings.telemetry_level < 1) return;
@@ -722,10 +772,10 @@ function sendTelemetry(done) {
 		fd.append("ping", pingStatus);
 		fd.append("jitter", jitterStatus);
 		fd.append("log", settings.telemetry_level > 1 ? log : "");
-		fd.append("extra", settings.telemetry_extra);
+		fd.append("extra", telemetryExtra());
 		xhr.send(fd);
 	} catch (ex) {
-		const postData = "extra=" + encodeURIComponent(settings.telemetry_extra) + "&ispinfo=" + encodeURIComponent(JSON.stringify(telemetryIspInfo)) + "&dl=" + encodeURIComponent(dlStatus) + "&ul=" + encodeURIComponent(ulStatus) + "&ping=" + encodeURIComponent(pingStatus) + "&jitter=" + encodeURIComponent(jitterStatus) + "&log=" + encodeURIComponent(settings.telemetry_level > 1 ? log : "");
+		const postData = "extra=" + encodeURIComponent(telemetryExtra()) + "&ispinfo=" + encodeURIComponent(JSON.stringify(telemetryIspInfo)) + "&dl=" + encodeURIComponent(dlStatus) + "&ul=" + encodeURIComponent(ulStatus) + "&ping=" + encodeURIComponent(pingStatus) + "&jitter=" + encodeURIComponent(jitterStatus) + "&log=" + encodeURIComponent(settings.telemetry_level > 1 ? log : "");
 		xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 		xhr.send(postData);
 	}

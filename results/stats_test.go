@@ -48,6 +48,33 @@ func TestReadableFields(t *testing.T) {
 	}
 }
 
+func TestLatency(t *testing.T) {
+	extra := `{"server":"Kyiv","latency":{"idle":{"avg":13.125,"jitter":0.4,"low":12.4,"high":15},"upload":{"avg":131.5,"jitter":2}}}`
+	latency, ok := parseLatency(extra)
+	if !ok {
+		t.Fatalf("parseLatency(%q) found no latency", extra)
+	}
+	want := []LatencyRow{
+		{Phase: "idle", Label: "Idle", Avg: "13.1", Jitter: "0.40", Low: "12.4", High: "15.0"},
+		{Phase: "upload", Label: "Upload", Avg: "132", Jitter: "2.00", Low: "--", High: "--"},
+	}
+	if got := latencyRows(latency); !reflect.DeepEqual(got, want) {
+		t.Errorf("latencyRows = %+v, want %+v", got, want)
+	}
+
+	// the latency is shown apart, so the extra data lists the rest
+	fields, _ := readableFields(extra, "latency")
+	if want := []StatsField{{Key: "field.server", Label: "Server", Value: "Kyiv"}}; !reflect.DeepEqual(fields, want) {
+		t.Errorf("readableFields without latency = %+v, want %+v", fields, want)
+	}
+
+	for _, raw := range []string{`{"server":"Kyiv"}`, `{"latency":42}`, `{"latency":{"idle":{}}}`, `not json`, ``} {
+		if _, ok := parseLatency(raw); ok {
+			t.Errorf("parseLatency(%q) found a latency", raw)
+		}
+	}
+}
+
 func TestHumanizeKey(t *testing.T) {
 	for in, want := range map[string]string{
 		"server":      "Server",

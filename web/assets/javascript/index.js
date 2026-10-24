@@ -83,6 +83,8 @@ window.addEventListener("DOMContentLoaded", () => {
  */
 function createSpeedtest() {
   testState.speedtest = new Speedtest();
+  // store the latency while idle, downloading and uploading with the results
+  testState.speedtest.setParameter("telemetry_latency", true);
   testState.speedtest.onupdate = (data) => {
     testState.testData = data;
     recordSample(data);
@@ -426,12 +428,26 @@ function trackLoadedLatency(data) {
     if (status.testState >= 4) {
       clearInterval(updater);
       worker.terminate();
+      testState.speedtest.setLoadedLatency(loadedLatencySummary());
     }
     testState.dirty = true;
   };
   worker.postMessage("start " + JSON.stringify({ url_ping: server.server + server.pingURL, duration: 0, mpot: true }));
   testState.latencyWorker = worker;
   testState.latencyKind = kind;
+}
+
+/**
+ * The latency under load as stored with the results, rounded to hundredths of a millisecond
+ */
+function loadedLatencySummary() {
+  const round = (v) => Math.round(v * 100) / 100;
+  const summary = {};
+  for (const kind of ["download", "upload"]) {
+    const stats = testState.loaded[kind];
+    if (stats) summary[kind] = { avg: round(stats.avg), jitter: round(stats.jitter), low: round(stats.min), high: round(stats.max) };
+  }
+  return summary;
 }
 
 function stopLatencyWorker() {

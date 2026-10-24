@@ -31,6 +31,7 @@
         --bad: #fb7185;
         --download: #3b82f6;
         --upload: #f59e0b;
+        --idle: #cbd5e1;
         --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
       }
 
@@ -514,6 +515,10 @@
         background-color: var(--upload);
       }
 
+      .dot.idle {
+        background-color: var(--idle);
+      }
+
       td {
         padding: 0.625rem 0.5rem;
         border-bottom: 1px solid var(--line);
@@ -718,6 +723,11 @@
       }
 
       .fields dd.soft {
+        color: var(--text-soft);
+        font-size: 0.875rem;
+      }
+
+      .fields .latency-detail {
         color: var(--text-soft);
         font-size: 0.875rem;
       }
@@ -1362,6 +1372,26 @@
                 {{- end }}
               </dl>
             </section>
+
+            {{- if .Latency }}
+            <section class="card animate-fade-in" aria-labelledby="latency-title">
+              <div class="card-head">
+                <h2 class="card-title" id="latency-title" data-i18n="stats.latency">Latency</h2>
+                <p class="card-note" data-i18n="stats.latencyNote">Average while idle, downloading and uploading</p>
+              </div>
+              <dl class="fields">
+                {{- range .Latency }}
+                <div>
+                  <dt><span class="dot {{ .Phase }}" aria-hidden="true"></span><span data-i18n="stab.phase.{{ .Phase }}">{{ .Label }}</span></dt>
+                  <dd>
+                    <span data-num="{{ .Avg }}">{{ .Avg }}</span> <span data-i18n="unit.ms">ms</span>
+                    <span class="latency-detail">· <span data-i18n="stats.latencyJitter">jitter</span> <span data-num="{{ .Jitter }}">{{ .Jitter }}</span> <span data-i18n="unit.ms">ms</span> · <span data-i18n="stats.latencyRange">low–high</span> <span data-num="{{ .Low }}">{{ .Low }}</span>–<span data-num="{{ .High }}">{{ .High }}</span> <span data-i18n="unit.ms">ms</span></span>
+                  </dd>
+                </div>
+                {{- end }}
+              </dl>
+            </section>
+            {{- end }}
 
             {{- if or .Extra .ExtraText }}
             <section class="card animate-fade-in" aria-labelledby="extra-title">

@@ -370,6 +370,13 @@ Speedtest.prototype = {
     this.worker.postMessage("start " + JSON.stringify(this._settings));
   },
   /**
+   * Hands the worker the latency measured while the download and upload ran, to store with the results.
+   * Used with the telemetry_latency setting.
+   */
+  setLoadedLatency: function(latency) {
+    if (this._state == 3) this.worker.postMessage("latency " + JSON.stringify(latency));
+  },
+  /**
    * Aborts the test while it's running.
    */
   abort: function() {

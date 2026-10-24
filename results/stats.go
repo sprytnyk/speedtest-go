@@ -65,7 +65,8 @@ type StatsEntry struct {
 	ISPInfoText  string // the stored ISP info when it is not the usual JSON
 	Languages    string
 	Extra        []StatsField
-	ExtraText    string // extra data that is not a JSON object
+	ExtraText    string       // extra data that is not a JSON object
+	Latency      []LatencyRow // latency while idle, downloading and uploading, shown apart from the extra data
 	LogLines     []LogLine
 	DownloadText string
 	UploadText   string
@@ -257,7 +258,12 @@ func newStatsEntry(t schema.TelemetryData) StatsEntry {
 		JitterText:    statValue(t.Jitter),
 	}
 
-	e.Extra, e.ExtraText = readableFields(t.Extra)
+	if latency, ok := parseLatency(t.Extra); ok {
+		e.Latency = latencyRows(latency)
+		e.Extra, e.ExtraText = readableFields(t.Extra, "latency")
+	} else {
+		e.Extra, e.ExtraText = readableFields(t.Extra)
+	}
 
 	var info Result
 	if err := json.Unmarshal([]byte(t.ISPInfo), &info); err != nil {
@@ -295,8 +301,9 @@ func statValue(raw string) string {
 var fieldKeys = map[string]string{"server": "field.server"}
 
 // readableFields lists a stored JSON object as labeled values, nested objects
-// under "parent › child". Anything that is not a JSON object comes back as text.
-func readableFields(raw string) ([]StatsField, string) {
+// under "parent › child", leaving out the top-level keys in skip. Anything that
+// is not a JSON object comes back as text.
+func readableFields(raw string, skip ...string) ([]StatsField, string) {
 	raw = strings.TrimSpace(raw)
 	dec := json.NewDecoder(strings.NewReader(raw))
 	dec.UseNumber()
@@ -310,6 +317,9 @@ func readableFields(raw string) ([]StatsField, string) {
 			return nil, ""
 		}
 		return nil, raw
+	}
+	for _, k := range skip {
+		delete(obj, k)
 	}
 	var fields []StatsField
 	flattenFields(&fields, "", "", obj)

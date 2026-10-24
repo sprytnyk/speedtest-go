@@ -39,6 +39,7 @@ const (
 	canvasHeight = 320
 	padding      = 24
 	tileGap      = 12
+	smallTileGap = 6 // least room between a small tile's label and its value
 )
 
 // colors from the web pages
@@ -62,14 +63,15 @@ var (
 	colorJitter   = metricColor{color.NRGBA{0x10, 0xb9, 0x81, 0xff}, color.NRGBA{0x34, 0xd3, 0x99, 0xff}}
 )
 
-// imageText holds the labels for one language, picked with the lang query parameter
+// imageText holds the labels for one language, picked with the lang query parameter. Tests
+// stored with their latency show it idle and under load; older tests show their ping and jitter.
 type imageText struct {
-	subtitle, download, upload, ping, jitter, mbps, ms, isp, decimal string
+	subtitle, download, upload, ping, jitter, idleLatency, idleJitter, latency, mbps, ms, isp, decimal string
 }
 
 var imageTexts = map[string]imageText{
-	"en": {"Speed test result", "Download", "Upload", "Ping", "Jitter", "Mbps", "ms", "ISP", "."},
-	"uk": {"Результат тесту швидкості", "Завантаження", "Вивантаження", "Пінг", "Джитер", "Мбіт/с", "мс", "Провайдер", ","},
+	"en": {"Speed test result", "Download", "Upload", "Ping", "Jitter", "Idle latency", "Idle jitter", "Latency", "Mbps", "ms", "ISP", "."},
+	"uk": {"Результат тесту швидкості", "Завантаження", "Вивантаження", "Пінг", "Джитер", "Затримка в простої", "Джитер у простої", "Затримка", "Мбіт/с", "мс", "Провайдер", ","},
 }
 
 var titleFace, subtitleFace, labelFace, valueFace, smallValueFace, unitFace, footFace font.Face
@@ -176,20 +178,32 @@ func renderResult(record *schema.TelemetryData, isp string, text imageText) *ima
 	drawText(img, titleFace, colorText, box.Max.X+14, padding+20, "LibreSpeed")
 	drawText(img, subtitleFace, colorMuted, box.Max.X+14, padding+39, text.subtitle)
 
-	// download and upload tiles
+	latency, _ := parseLatency(record.Extra)
+	loaded := func(s *LatencyStats) string {
+		if !s.has() {
+			return ""
+		}
+		return latencyText(s.Avg, text.decimal) + " " + text.ms
+	}
+
+	// download and upload tiles, with the latency while each ran
 	tileW := (canvasWidth - 2*padding - tileGap) / 2
 	top := box.Max.Y + 16
 	bigTile(img, image.Rect(padding, top, padding+tileW, top+116), iconDownload, colorDownload,
-		text.download, formatImageValue(record.Download, text.decimal), text.mbps)
+		text.download, formatImageValue(record.Download, text.decimal), text.mbps, text.latency, loaded(latency.Download))
 	bigTile(img, image.Rect(padding+tileW+tileGap, top, canvasWidth-padding, top+116), iconUpload, colorUpload,
-		text.upload, formatImageValue(record.Upload, text.decimal), text.mbps)
+		text.upload, formatImageValue(record.Upload, text.decimal), text.mbps, text.latency, loaded(latency.Upload))
 
-	// ping and jitter tiles
+	// ping and jitter tiles: the average idle latency when it was stored, the lowest ping otherwise
+	pingLabel, pingValue, jitterLabel := text.ping, formatImageValue(record.Ping, text.decimal), text.jitter
+	if latency.Idle.has() {
+		pingLabel, pingValue, jitterLabel = text.idleLatency, latencyText(latency.Idle.Avg, text.decimal), text.idleJitter
+	}
 	top += 116 + tileGap
 	smallTile(img, image.Rect(padding, top, padding+tileW, top+60), iconPing, colorPing,
-		text.ping, formatImageValue(record.Ping, text.decimal), text.ms)
+		pingLabel, pingValue, text.ms)
 	smallTile(img, image.Rect(padding+tileW+tileGap, top, canvasWidth-padding, top+60), iconJitter, colorJitter,
-		text.jitter, formatImageValue(record.Jitter, text.decimal), text.ms)
+		jitterLabel, formatImageValue(record.Jitter, text.decimal), text.ms)
 
 	// footer: provider on the left, time on the right
 	baseline := canvasHeight - padding + 2
@@ -204,7 +218,8 @@ func renderResult(record *schema.TelemetryData, isp string, text imageText) *ima
 	return img
 }
 
-func bigTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, label, value, unit string) {
+// bigTile draws a speed, with the latency while it was measured on the right when there is one
+func bigTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, label, value, unit, latencyLabel, latency string) {
 	paint(img, r, colorRaised, roundRect(r, 12))
 
 	box := image.Rect(r.Min.X+16, r.Min.Y+16, r.Min.X+16+28, r.Min.Y+16+28)
@@ -215,6 +230,10 @@ func bigTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, 
 	x := drawText(img, valueFace, colorText, r.Min.X+16, r.Min.Y+86, value)
 	if value != "--" {
 		drawText(img, unitFace, colorMuted, x+6, r.Min.Y+86, unit)
+	}
+	if latency != "" {
+		drawText(img, footFace, colorMuted, r.Max.X-16-textWidth(footFace, latencyLabel), r.Min.Y+66, latencyLabel)
+		drawText(img, labelFace, colorText, r.Max.X-16-textWidth(labelFace, latency), r.Min.Y+86, latency)
 	}
 
 	// a full bar, matching the finished test on the page
@@ -231,15 +250,15 @@ func smallTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor
 	box := image.Rect(r.Min.X+16, r.Min.Y+16, r.Min.X+16+28, r.Min.Y+16+28)
 	paint(img, box, withAlpha(c.base, 0x33), roundRect(box, 8))
 	drawIcon(img, box, 16, icon, c.light)
-	drawText(img, labelFace, colorMuted, box.Max.X+10, box.Min.Y+19, label)
 
-	// value and unit, right-aligned
+	// value and unit, right-aligned, and the label shortened to the room left of them
 	baseline := r.Min.Y + 38
 	unitWidth := 0
 	if value != "--" {
 		unitWidth = 5 + textWidth(unitFace, unit)
 	}
 	x := r.Max.X - 16 - unitWidth - textWidth(smallValueFace, value)
+	drawText(img, labelFace, colorMuted, box.Max.X+10, box.Min.Y+19, fitText(labelFace, label, x-box.Max.X-10-smallTileGap))
 	x = drawText(img, smallValueFace, colorText, x, baseline, value)
 	if value != "--" {
 		drawText(img, unitFace, colorMuted, x+5, baseline, unit)
