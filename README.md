@@ -190,15 +190,16 @@ A stored test can then be read at:
 
 ## ISP lookup and privacy
 
-The client's ISP and country come from the [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json) API. Only the
-client's IP address is sent: no API key, cookies or other identifiers. Private and special addresses (including
-CGNAT and IPv6 ULA) are never sent. The client IP is taken from the connection, or from the `X-Forwarded-For`,
-`X-Real-IP`, `Client-IP` and `CF-Connecting-IPv6` headers when a proxy sets them.
+The client's ISP and country come from the API set in `ip_lookup_url`. The `settings.toml` in this repository, and
+so the Docker image, uses [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json); without the key, there are no
+lookups. Only the client's IP address is sent: no API key, cookies or other identifiers. Private and special
+addresses (including CGNAT and IPv6 ULA) are never sent. The client IP is taken from the connection, or from the
+`X-Forwarded-For`, `X-Real-IP`, `Client-IP` and `CF-Connecting-IPv6` headers when a proxy sets them.
 
 * To use another API, point `ip_lookup_url` at it. `{ip}` in the URL is replaced with the client's IP, and the
   response must be JSON with `ip`, `city`, `country`, `iso_code` and `org` fields.
-* To turn lookups off for everyone, set `ip_lookup_url=""`. To turn them off in the web UI only, set
-  `getIp_ispInfo: false` in its settings.
+* To turn lookups off for everyone, set `ip_lookup_url=""` or leave the key out. To turn them off in the web UI
+  only, set `getIp_ispInfo: false` in its settings.
 
 ## Languages
 

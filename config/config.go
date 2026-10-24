@@ -37,10 +37,6 @@ type Config struct {
 	TLSKeyFile  string `mapstructure:"tls_key_file"`
 }
 
-// DefaultIPLookupURL is the IP information API used for ISP and country detection.
-// See https://ip.sprytnyk.dev/openapi.json for the schema.
-const DefaultIPLookupURL = "https://ip.sprytnyk.dev/api/ip/{ip}/"
-
 // IPLookupPlaceholder is replaced with the client's IP in ip_lookup_url.
 const IPLookupPlaceholder = "{ip}"
 
@@ -59,7 +55,7 @@ func init() {
 	viper.SetDefault("statistics_password", "PASSWORD")
 	viper.SetDefault("redact_ip_addresses", false)
 	viper.SetDefault("assets_path", "")
-	viper.SetDefault("ip_lookup_url", DefaultIPLookupURL)
+	viper.SetDefault("ip_lookup_url", "") // no lookups unless settings.toml or the environment names an API
 	viper.SetDefault("database_type", "postgresql")
 	viper.SetDefault("database_hostname", "localhost")
 	viper.SetDefault("database_name", "speedtest")
