@@ -21,6 +21,8 @@ const testState = {
   startedAt: 0, // performance.now() when the test started
   samples: [], // { t: seconds since start, v: Mbps, kind: "dl" | "ul" }
   loaded: { download: null, upload: null }, // latency while each transfer ran, from the stability worker
+  loadedDone: { download: false, upload: false }, // the pinger for each transfer finished, with or without a reply
+  readyWorkers: {}, // a pinger for each transfer, made before it starts so its script is already loaded
   latencyWorker: null, // pings the server while the download or upload runs
   latencyKind: null, // "download" or "upload" while latencyWorker runs
   customStreams: false, // settings.json sets the download streams itself
@@ -92,6 +94,7 @@ function createSpeedtest() {
     testState.dirty = true;
   };
   testState.speedtest.onend = (aborted) => {
+    discardReadyWorkers();
     testState.state = aborted ? READY : FINISHED;
     testState.aborted = aborted;
     testState.dirty = true;
@@ -160,12 +163,16 @@ function startButtonClickHandler() {
       testState.testData = null;
       testState.samples = [];
       testState.loaded = { download: null, upload: null };
+      testState.loadedDone = { download: false, upload: false };
       testState.aborted = false;
       testState.hoverX = null;
       if (!testState.customStreams) {
         // over HTTP/1.1 browsers open at most 6 connections to a server, so leave room for the latency pings
         testState.speedtest.setParameter("xhr_dlMultistream", multiplexed(testState.speedtest.getSelectedServer()) ? 6 : 4);
       }
+      // the first ping goes out as soon as a transfer starts, instead of waiting for a script over a busy line
+      discardReadyWorkers();
+      testState.readyWorkers = { download: newLatencyWorker(), upload: newLatencyWorker() };
       testState.startedAt = performance.now();
       testState.speedtest.start();
       testState.state = RUNNING;
@@ -419,20 +426,32 @@ function trackLoadedLatency(data) {
   if (!kind) return;
   const server = testState.speedtest.getSelectedServer();
   // pings run in their own worker, so the download's resource timings don't mix with theirs
-  const worker = new Worker("stability_worker.js?r=" + Math.random());
+  const worker = testState.readyWorkers[kind] || newLatencyWorker();
+  delete testState.readyWorkers[kind];
   const updater = setInterval(() => worker.postMessage("status"), 200);
+  const run = testState.startedAt;
   worker.onmessage = (e) => {
     const status = JSON.parse(e.data);
+    // the last ping's grace can outlast its test, and a new test has its own pingers
+    if (testState.startedAt !== run) {
+      clearInterval(updater);
+      worker.terminate();
+      return;
+    }
     const stats = status.phases[0];
     if (stats.samples > stats.failed) testState.loaded[kind] = stats;
     if (status.testState >= 4) {
       clearInterval(updater);
       worker.terminate();
+      testState.loadedDone[kind] = true;
       testState.speedtest.setLoadedLatency(loadedLatencySummary());
     }
     testState.dirty = true;
   };
-  worker.postMessage("start " + JSON.stringify({ url_ping: server.server + server.pingURL, duration: 0, mpot: true }));
+  // a congested line can hold a ping for seconds, which is the latency under load rather than a lost ping,
+  // so pings wait as long as they take, and the last one gets 2 s after the transfer ends to come back
+  const settings = { url_ping: server.server + server.pingURL, duration: 0, mpot: true, ping_timeout: 0, finish_grace: 2000 };
+  worker.postMessage("start " + JSON.stringify(settings));
   testState.latencyWorker = worker;
   testState.latencyKind = kind;
 }
@@ -454,6 +473,16 @@ function loadedLatencySummary() {
     }
   }
   return summary;
+}
+
+function newLatencyWorker() {
+  return new Worker("stability_worker.js?r=" + Math.random());
+}
+
+// pingers made for a transfer the test never ran, such as after it was stopped
+function discardReadyWorkers() {
+  for (const kind in testState.readyWorkers) testState.readyWorkers[kind].terminate();
+  testState.readyWorkers = {};
 }
 
 function stopLatencyWorker() {
@@ -592,8 +621,8 @@ function renderResults() {
   const pinged = formatNumber(idleLatency(data)) !== "--";
   setRange("ping-range", pinged ? data.pingStatus : null, data.pingHigh);
   setRange("jitter-range", data.jitterLow, data.jitterHigh);
-  setLoaded("download-latency", testState.loaded.download);
-  setLoaded("upload-latency", testState.loaded.upload);
+  setLoaded("download-latency", "download");
+  setLoaded("upload-latency", "upload");
   $("download-progress").style.width = Math.round((Number(data.dlProgress) || 0) * 100) + "%";
   $("upload-progress").style.width = Math.round((Number(data.ulProgress) || 0) * 100) + "%";
 
@@ -622,11 +651,15 @@ function idleLatency(data) {
   return data.pingAvgStatus !== undefined ? data.pingAvgStatus : data.pingStatus;
 }
 
-// the numbers stand out from the words around them, like the label before them
-function setLoaded(id, stats) {
+// the numbers stand out from the words around them, like the label before them; the text
+// carries its own separator from the label, so "no reply" can follow it with a colon
+function setLoaded(id, kind) {
   const el = $(id);
+  const stats = testState.loaded[kind];
   if (!stats) {
-    el.textContent = "--";
+    // the pinger finished without a single reply, which says more than "--"
+    const noReply = testState.loadedDone[kind] && !testState.aborted;
+    el.textContent = noReply ? ": " + I18N.t("index.loaded.noReply") : " --";
     return;
   }
   const value = (v) => {
@@ -635,7 +668,7 @@ function setLoaded(id, stats) {
     span.textContent = formatNumber(v) + " " + I18N.t("unit.ms");
     return span;
   };
-  el.replaceChildren(value(stats.avg), ", " + I18N.t("index.loaded.jitter") + " ", value(stats.jitter));
+  el.replaceChildren(" ", value(stats.avg), ", " + I18N.t("index.loaded.jitter") + " ", value(stats.jitter));
 }
 
 /**

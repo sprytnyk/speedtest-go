@@ -23,12 +23,15 @@ let settings = {
   url_ping_external: "", // external URL to ping (uses fetch no-cors, e.g. "https://www.google.com/generate_204")
   duration: 60, // seconds, 0 runs until the page sends "finish"
   ping_interval: 200, // minimum ms between pings to limit sample rate
-  ping_timeout: 5000,
+  ping_timeout: 5000, // ms, 0 waits as long as the ping takes
+  finish_grace: 0, // ms to wait for the ping on its way when the page sends "finish"
   ping_allowPerformanceApi: true,
   mpot: false
 };
 
 let xhr = null;
+let pinging = false; // a ping is on its way
+let finishing = false; // the page sent "finish" and the ping on its way gets finish_grace to come back
 let startTime = 0;
 let prevInstspd = 0;
 let aborted = false;
@@ -139,15 +142,12 @@ this.addEventListener("message", function (e) {
     while (phases.length <= phase) phases.push(newStats());
   }
   if (params[0] === "finish") {
-    // the page ends a test that has no fixed duration
-    if (testState >= 4) return;
-    testState = 4;
-    progress = 1;
-    if (xhr) {
-      try {
-        xhr.abort();
-      } catch (e) {}
-    }
+    // the page ends a test that has no fixed duration; the ping on its way still measures the load, so it can get a moment
+    if (testState >= 4 || finishing) return;
+    if (pinging && settings.finish_grace > 0) {
+      finishing = true;
+      setTimeout(finish, settings.finish_grace);
+    } else finish();
   }
   if (params[0] === "abort") {
     if (testState >= 4) return;
@@ -160,6 +160,17 @@ this.addEventListener("message", function (e) {
     }
   }
 });
+
+function finish() {
+  if (testState >= 4) return;
+  testState = 4;
+  progress = 1;
+  if (xhr) {
+    try {
+      xhr.abort();
+    } catch (e) {}
+  }
+}
 
 function recordPing(instspd) {
   // guard against 0ms pings
@@ -219,6 +230,7 @@ function doPing() {
   const prevT = new Date().getTime();
   xhr = new XMLHttpRequest();
   xhr.onload = function () {
+    pinging = false;
     if (aborted || testState >= 4) return;
     const now = new Date().getTime();
     let instspd = now - prevT;
@@ -240,12 +252,15 @@ function doPing() {
     }
 
     recordPing(instspd);
-    schedulePing(instspd);
+    if (finishing) finish();
+    else schedulePing(instspd);
   };
   xhr.onerror = function () {
+    pinging = false;
     if (aborted || testState >= 4) return;
     recordLoss();
-    schedulePing(0);
+    if (finishing) finish();
+    else schedulePing(0);
   };
   xhr.ontimeout = xhr.onerror;
   xhr.open(
@@ -256,6 +271,7 @@ function doPing() {
   try {
     xhr.timeout = settings.ping_timeout;
   } catch (e) {}
+  pinging = true;
   xhr.send();
 }
 
