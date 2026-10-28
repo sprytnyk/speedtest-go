@@ -588,6 +588,10 @@ function renderResults() {
   setStat("upload-speed", formatNumber(data.ulStatus));
   setStat("ping", formatNumber(idleLatency(data)));
   setStat("jitter", formatNumber(data.jitterStatus));
+  // the lowest ping reads 0 before the first pong, so its range waits for the average
+  const pinged = formatNumber(idleLatency(data)) !== "--";
+  setRange("ping-range", pinged ? data.pingStatus : null, data.pingHigh);
+  setRange("jitter-range", data.jitterLow, data.jitterHigh);
   setLoaded("download-latency", testState.loaded.download);
   setLoaded("upload-latency", testState.loaded.upload);
   $("download-progress").style.width = Math.round((Number(data.dlProgress) || 0) * 100) + "%";
@@ -603,6 +607,14 @@ function setStat(id, text) {
   const el = $(id);
   el.textContent = text;
   el.parentNode.classList.toggle("empty", text === "--");
+}
+
+// the lowest and highest under the average, hidden until both are measured
+function setRange(id, low, high) {
+  const el = $(id);
+  const shown = formatNumber(low) !== "--" && formatNumber(high) !== "--";
+  el.textContent = shown ? formatNumber(low) + "–" + formatNumber(high) : "";
+  el.hidden = !shown;
 }
 
 // the average of the ping test, like the latency under load; workers without it report the lowest ping
