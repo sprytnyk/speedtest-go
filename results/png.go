@@ -179,20 +179,24 @@ func renderResult(record *schema.TelemetryData, isp string, text imageText) *ima
 	drawText(img, subtitleFace, colorMuted, box.Max.X+14, padding+39, text.subtitle)
 
 	latency, _ := parseLatency(record.Extra)
-	loaded := func(s *LatencyStats) string {
+	loaded := func(s *LatencyStats) []tileRow {
 		if !s.has() {
-			return ""
+			return nil
 		}
-		return latencyText(s.Avg, text.decimal) + " " + text.ms
+		rows := []tileRow{{text.latency, latencyText(s.Avg, text.decimal) + " " + text.ms}}
+		if s.Jitter != nil {
+			rows = append(rows, tileRow{text.jitter, latencyText(s.Jitter, text.decimal) + " " + text.ms})
+		}
+		return rows
 	}
 
-	// download and upload tiles, with the latency while each ran
+	// download and upload tiles, with the latency and jitter while each ran
 	tileW := (canvasWidth - 2*padding - tileGap) / 2
 	top := box.Max.Y + 16
 	bigTile(img, image.Rect(padding, top, padding+tileW, top+116), iconDownload, colorDownload,
-		text.download, formatImageValue(record.Download, text.decimal), text.mbps, text.latency, loaded(latency.Download))
+		text.download, formatImageValue(record.Download, text.decimal), text.mbps, loaded(latency.Download))
 	bigTile(img, image.Rect(padding+tileW+tileGap, top, canvasWidth-padding, top+116), iconUpload, colorUpload,
-		text.upload, formatImageValue(record.Upload, text.decimal), text.mbps, text.latency, loaded(latency.Upload))
+		text.upload, formatImageValue(record.Upload, text.decimal), text.mbps, loaded(latency.Upload))
 
 	// ping and jitter tiles: the average idle latency when it was stored, the lowest ping otherwise
 	pingLabel, pingValue, jitterLabel := text.ping, formatImageValue(record.Ping, text.decimal), text.jitter
@@ -218,8 +222,17 @@ func renderResult(record *schema.TelemetryData, isp string, text imageText) *ima
 	return img
 }
 
-// bigTile draws a speed, with the latency while it was measured on the right when there is one
-func bigTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, label, value, unit, latencyLabel, latency string) {
+// tileRow is a label and its value, such as the latency while a speed was measured
+type tileRow struct {
+	label, value string
+}
+
+// bigTileRowBaselines are where the rows on the right of a big tile sit, between the tile's
+// label and the speed's unit, so long speeds pass under them instead of into them
+var bigTileRowBaselines = []int{54, 72}
+
+// bigTile draws a speed, with the latency and jitter while it was measured on the right when there are any
+func bigTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, label, value, unit string, rows []tileRow) {
 	paint(img, r, colorRaised, roundRect(r, 12))
 
 	box := image.Rect(r.Min.X+16, r.Min.Y+16, r.Min.X+16+28, r.Min.Y+16+28)
@@ -231,9 +244,19 @@ func bigTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, 
 	if value != "--" {
 		drawText(img, unitFace, colorMuted, x+6, r.Min.Y+86, unit)
 	}
-	if latency != "" {
-		drawText(img, footFace, colorMuted, r.Max.X-16-textWidth(footFace, latencyLabel), r.Min.Y+66, latencyLabel)
-		drawText(img, labelFace, colorText, r.Max.X-16-textWidth(labelFace, latency), r.Min.Y+86, latency)
+
+	// values right-aligned in a column, labels right-aligned before it and shortened to stay clear of the speed
+	valuesWidth := 0
+	for _, row := range rows {
+		valuesWidth = max(valuesWidth, textWidth(labelFace, row.value))
+	}
+	labelEnd := r.Max.X - 16 - valuesWidth - 6
+	labelRoom := labelEnd - (r.Min.X + 16 + textWidth(valueFace, value) + 8)
+	for i, row := range rows[:min(len(rows), len(bigTileRowBaselines))] {
+		y := r.Min.Y + bigTileRowBaselines[i]
+		rowLabel := fitText(footFace, row.label, labelRoom)
+		drawText(img, footFace, colorMuted, labelEnd-textWidth(footFace, rowLabel), y, rowLabel)
+		drawText(img, labelFace, colorText, r.Max.X-16-textWidth(labelFace, row.value), y, row.value)
 	}
 
 	// a full bar, matching the finished test on the page

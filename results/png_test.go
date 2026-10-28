@@ -79,8 +79,13 @@ func TestRenderResult(t *testing.T) {
 	}
 	withLatency := *record
 	withLatency.Extra = `{"server":"Kyiv","latency":{"idle":{"avg":13.1,"jitter":1.86,"low":12.4,"high":15},` +
-		`"download":{"avg":48.27,"jitter":6.1,"low":20,"high":90},"upload":{"avg":31.5,"jitter":2,"low":14,"high":40}}}`
-	for _, r := range []*schema.TelemetryData{record, &withLatency} {
+		`"download":{"avg":48.27,"jitter":6.1,"jitterLow":0.5,"jitterHigh":40,"low":20,"high":90},"upload":{"avg":31.5,"jitter":2,"low":14,"high":40}}}`
+	// stored before the jitter, or with a speed too long for the rows' labels
+	noJitter := *record
+	noJitter.Extra = `{"latency":{"download":{"avg":48.27}}}`
+	fast := withLatency
+	fast.Download = "123456.78"
+	for _, r := range []*schema.TelemetryData{record, &withLatency, &noJitter, &fast} {
 		for lang, text := range imageTexts {
 			img := renderResult(r, "Example ISP with a rather long name that has to be shortened, Ukraine", text)
 			if img.Bounds() != image.Rect(0, 0, canvasWidth*imageScale, canvasHeight*imageScale) {
@@ -92,6 +97,23 @@ func TestRenderResult(t *testing.T) {
 			}
 			if _, _, _, a := img.At(canvasWidth*imageScale/2, canvasHeight*imageScale/2).RGBA(); a != 0xffff {
 				t.Errorf("%s: center is not opaque", lang)
+			}
+		}
+	}
+}
+
+// the big tiles' latency and jitter rows sit right of the speed, and their labels
+// shouldn't need shortening for speeds up to five digits
+func TestImageRowsFit(t *testing.T) {
+	initFonts()
+	tileW := (canvasWidth - 2*padding - tileGap) / 2
+	for lang, text := range imageTexts {
+		valuesWidth := textWidth(labelFace, "999 "+text.ms)
+		labelEnd := tileW - 16 - valuesWidth - 6
+		speedEnd := 16 + textWidth(valueFace, "99999") + 8
+		for _, label := range []string{text.latency, text.jitter} {
+			if w := textWidth(footFace, label); w > labelEnd-speedEnd {
+				t.Errorf("%s row label %q is %d points wide, %d fit", lang, label, w, labelEnd-speedEnd)
 			}
 		}
 	}
