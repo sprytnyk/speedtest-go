@@ -648,6 +648,14 @@
         margin-left: 0.125rem;
       }
 
+      /* the lowest and highest under an average */
+      .stat-sub {
+        margin-top: 0.125rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
       /* Latency under load: one row per phase */
 
       .phase-table {
@@ -732,6 +740,12 @@
         font-size: 0.75rem;
         color: var(--text-muted);
         margin-left: 0.125rem;
+      }
+
+      .cell-range {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--text-muted);
       }
 
       /* Chart */
@@ -1000,7 +1014,7 @@
       }
 
       @media screen and (max-width: 480px) {
-        .phase-table .col-range {
+        .phase-table .cell-range {
           display: none;
         }
         .phase-table th,
@@ -1038,10 +1052,10 @@
         }
         .stat.main {
           grid-column: 1 / -1;
-          display: flex;
+          display: grid;
+          grid-template-columns: auto 1fr;
           align-items: center;
-          justify-content: space-between;
-          gap: 0.75rem;
+          gap: 0 0.75rem;
         }
         .stat.main .stat-head {
           flex-direction: row;
@@ -1051,6 +1065,11 @@
         }
         .stat.main .stat-value {
           font-size: 1.375rem;
+          text-align: right;
+        }
+        .stat.main .stat-sub {
+          grid-column: 1 / -1;
+          text-align: right;
         }
       }
     </style>
@@ -1232,6 +1251,7 @@
                 <p class="stat-label" data-i18n="stab.jitter">Jitter</p>
               </div>
               <p class="stat-value"><span id="statJitter">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+              <p class="stat-sub" id="statJitterRange" title="Low–high" data-i18n-attr="title:stab.range" hidden></p>
             </div>
             <div class="stat">
               <p class="stat-label" data-i18n="stab.min">Min</p>
@@ -1266,7 +1286,6 @@
                 <th scope="col" data-i18n="stab.speed">Speed</th>
                 <th scope="col" data-i18n="stab.latency">Latency</th>
                 <th scope="col" data-i18n="stab.jitter">Jitter</th>
-                <th scope="col" class="col-range" data-i18n="stab.range">Low–high</th>
               </tr>
             </thead>
             <tbody id="phaseRows">
@@ -1275,21 +1294,18 @@
                 <td></td>
                 <td></td>
                 <td></td>
-                <td class="col-range"></td>
               </tr>
               <tr data-phase="download">
                 <th scope="row" data-i18n="stab.phase.download">Download</th>
                 <td></td>
                 <td></td>
                 <td></td>
-                <td class="col-range"></td>
               </tr>
               <tr data-phase="upload">
                 <th scope="row" data-i18n="stab.phase.upload">Upload</th>
                 <td></td>
                 <td></td>
                 <td></td>
-                <td class="col-range"></td>
               </tr>
             </tbody>
           </table>
@@ -1763,6 +1779,7 @@
       function resetUI() {
         var stats = ["statCurrent", "statAvg", "statJitter", "statMin", "statMax", "statLoss", "statSamples"];
         for (var i = 0; i < stats.length; i++) setStat(stats[i], "--");
+        setRange(I("statJitterRange"), -1, -1);
         setIdleVerdict("status.ready", "stab.readyText");
         I("downloadCsvBtn").disabled = true;
         setProgress(0, 0, parseInt(I("durationSelect").value));
@@ -1784,6 +1801,15 @@
         v = Number(v);
         if (isNaN(v) || v <= 0) return "--";
         return I18N.num(v, v < 10 ? 2 : v < 100 ? 1 : 0);
+      }
+
+      // a lowest and highest, where 0 is a real lowest jitter and -1 means not measured yet
+      function fmtRange(low, high) {
+        if (!(low >= 0) || !(high >= 0)) return "";
+        var zero = function (v) {
+          return Number(v) === 0 ? I18N.num(0, 2) : fmt(v);
+        };
+        return zero(low) + "–" + zero(high);
       }
 
       function fmtTime(sec) {
@@ -1887,6 +1913,7 @@
         setStat("statMin", d.minPing > 0 ? fmt(d.minPing) : "--");
         setStat("statMax", fmt(d.maxPing));
         setStat("statJitter", fmt(d.jitter));
+        setRange(I("statJitterRange"), d.jitterMin, d.jitterMax);
         setStat("statLoss", d.totalSamples > 0 ? I18N.num(d.packetLoss, 1) : "--");
         setStat("statSamples", d.totalSamples > 0 ? String(d.totalSamples) : "--");
         if (loadTest) {
@@ -1900,14 +1927,26 @@
         showVerdict(d);
       }
 
-      // a table value with its unit, which is left out while there is no value
-      function setCell(cell, text, unit) {
+      // the range under an average, hidden while there is none
+      function setRange(el, low, high) {
+        el.textContent = fmtRange(low, high);
+        el.hidden = !el.textContent;
+      }
+
+      // a table value with its unit, which is left out while there is no value, and its range under it
+      function setCell(cell, text, unit, range) {
         cell.textContent = text;
         if (text === "--") return;
         var u = document.createElement("span");
         u.className = "cell-unit";
         u.textContent = unit;
         cell.appendChild(u);
+        if (!range) return;
+        var r = document.createElement("span");
+        r.className = "cell-range";
+        r.title = I18N.t("stab.range");
+        r.textContent = range;
+        cell.appendChild(r);
       }
 
       // one row per phase: speed from the load worker, latency from the pings made during that phase
@@ -1918,9 +1957,8 @@
           var got = received(p);
           var cells = rows[n].cells;
           setCell(cells[1], fmt(loadSpeeds[n]), I18N.t("unit.mbps"));
-          setCell(cells[2], got ? fmt(p.avg) : "--", I18N.t("unit.ms"));
-          setCell(cells[3], got ? fmt(p.jitter) : "--", I18N.t("unit.ms"));
-          setCell(cells[4], got ? fmt(p.min) + "–" + fmt(p.max) : "--", I18N.t("unit.ms"));
+          setCell(cells[2], got ? fmt(p.avg) : "--", I18N.t("unit.ms"), got ? fmtRange(p.min, p.max) : "");
+          setCell(cells[3], got ? fmt(p.jitter) : "--", I18N.t("unit.ms"), got ? fmtRange(p.jitterMin, p.jitterMax) : "");
           if (running && loadTest && d && d.phase === n) rows[n].setAttribute("aria-current", "step");
           else rows[n].removeAttribute("aria-current");
         }
