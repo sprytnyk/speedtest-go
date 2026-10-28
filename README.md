@@ -27,18 +27,20 @@ This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedt
 
 ## Features
 
-* Download and upload speed, ping and jitter, with a live speed chart, and latency while downloading and uploading.
-  Jitter is the average change between consecutive pings, shown with the smallest and largest change
+* Download and upload speed, ping and jitter, with a live speed chart
+* Latency and jitter while downloading and uploading
+* Jitter as the average change between consecutive pings, shown with the smallest and largest change
 * IP address, ISP and country of the client
-* Connection stability test (`/stability.html`): latency over time, jitter, failed requests, an alert threshold and
-  CSV export, idle or under load (idle, then download, then upload, with latency for each phase)
+* Connection stability test at `/stability.html`, with latency over time, jitter, failed requests, an alert threshold
+  and CSV export. It runs idle or under load, where it pings while idle, then downloading, then uploading, and shows
+  the latency of each phase
 * Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
 * Multiple test servers to choose from
 * English and Ukrainian, picked from the browser's language or a switch on every page
 * Layouts for desktop and phone
 * Optional IP redaction for stored results
 * Supports the [PROXY protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt)
-* Answers the PHP backend's endpoints too (`.php` suffixes and the `/backend/` prefix)
+* Answers the PHP backend's endpoints too, with their `.php` suffixes and `/backend/` prefix
 
 The pages work in current versions of Firefox, Chrome, Edge and Safari, on desktop and mobile.
 
@@ -56,16 +58,20 @@ The test is then served at `http://<host>:8989/`.
 
 ### Docker
 
-Images for `linux/amd64`, `linux/arm64`, `linux/arm/v7` and `linux/386` are published to the GitHub Container
-Registry for every release, tagged with its version (e.g. `v1.3.0`) and `latest`:
+Every release publishes images for `linux/amd64`, `linux/arm64`, `linux/arm/v7` and `linux/386` to the GitHub
+Container Registry, tagged with the version, such as `v3.1.0`, and with `latest`:
 
 ```
 docker run -d -p 8989:8989 ghcr.io/sprytnyk/speedtest-go:latest
 ```
 
-The image contains the repository's `settings.toml`, which keeps results in memory. Change settings with
-environment variables (e.g. `-e SPEEDTEST_DATABASE_TYPE=sqlite -e SPEEDTEST_DATABASE_FILE=/data/speedtest.db
--v speedtest-data:/data`), or mount your own file over `/app/settings.toml`.
+The image contains the repository's `settings.toml`, which keeps results in memory. To change settings, mount your
+own file over `/app/settings.toml`, or use environment variables:
+
+```
+docker run -d -p 8989:8989 -e SPEEDTEST_DATABASE_TYPE=sqlite -e SPEEDTEST_DATABASE_FILE=/data/speedtest.db \
+  -v speedtest-data:/data ghcr.io/sprytnyk/speedtest-go:latest
+```
 
 ### systemd
 
@@ -78,7 +84,7 @@ environment variables (e.g. `-e SPEEDTEST_DATABASE_TYPE=sqlite -e SPEEDTEST_DATA
 
 ### From source
 
-Go 1.27 or later is needed:
+Building needs Go 1.27 or later:
 
 ```
 git clone https://github.com/sprytnyk/speedtest-go
@@ -86,8 +92,8 @@ cd speedtest-go
 go build -ldflags "-w -s -X main.version=$(git describe --tags)" -trimpath -o speedtest-backend .
 ```
 
-The web UI from `web/assets` is embedded in the binary, so `speedtest-backend` and `settings.toml` are all you need
-to copy to the server.
+The binary embeds the web UI from `web/assets`, so you only copy `speedtest-backend` and `settings.toml` to the
+server.
 
 `scripts/build-release.sh` builds the release archives and their `SHA256SUMS` for every platform into `dist/`. The
 *Release builds* workflow runs it for every version tag, and from the Actions tab for any branch, and keeps the
@@ -96,20 +102,20 @@ checksums on any machine with the same Go toolchain.
 
 ## Configuration
 
-Settings are read from `settings.toml`; the file in this repository lists every key with a comment. Each key can
-also be set with an environment variable named `SPEEDTEST_` plus the key in capitals, e.g.
-`SPEEDTEST_LISTEN_PORT=8080`, which takes precedence over the file.
+The server reads its settings from `settings.toml`. The file in this repository lists every key with a comment. An
+environment variable named `SPEEDTEST_` plus the key in capitals, such as `SPEEDTEST_LISTEN_PORT=8080`, overrides
+the key in the file.
 
 | Key | Meaning |
 | --- | --- |
 | `bind_address`, `listen_port` | Where to listen. An empty address listens on all interfaces; the port defaults to 8989. |
-| `url_base` | Path prefix when the test is served below the site root, e.g. `/librespeed`. |
+| `url_base` | Path prefix when the test is served below the site root, such as `/librespeed`. |
 | `proxyprotocol_port` | Extra port that expects the PROXY protocol, `0` to disable. |
-| `assets_path` | Directory with your own copy of the web UI. When empty or missing, the built-in UI is used. |
+| `assets_path` | Directory with your own copy of the web UI. When it is empty or missing, the server uses the built-in UI. |
 | `ip_lookup_url` | ISP lookup API, see [ISP lookup and privacy](#isp-lookup-and-privacy). |
 | `database_type` | Where results are stored: `none`, `memory`, `bolt`, `sqlite`, `mysql`, `postgresql` or `mssql`. |
 | `database_file` | Database file for `bolt` and `sqlite`. |
-| `database_hostname`, `database_port`, `database_name`, `database_username`, `database_password` | Connection settings for MySQL, PostgreSQL and MSSQL. `database_port` is only used by MSSQL. |
+| `database_hostname`, `database_port`, `database_name`, `database_username`, `database_password` | Connection settings for MySQL, PostgreSQL and MSSQL. Only MSSQL uses `database_port`. |
 | `statistics_password` | Password of the statistics page. The page stays locked while it is `PASSWORD` or empty. |
 | `redact_ip_addresses` | Store results without the client's IP address and hostname. |
 | `enable_tls`, `enable_http2`, `tls_cert_file`, `tls_key_file` | Serve HTTPS directly. HTTP/2 needs TLS. |
@@ -138,11 +144,11 @@ serves the page.
 
 ## Storing results
 
-Results are stored when the page sends them at the end of a test. That gives every test an ID, the **Share** button
-with a result image, and the statistics page. To turn it on:
+The server stores a result when the page sends it at the end of a test. That gives every test an ID, the **Share**
+button with a result image, and the statistics page. To turn it on:
 
-1. Choose a database with `database_type`. `sqlite` is the simplest: it only needs `database_file`, and creates
-   its tables itself.
+1. Choose a database with `database_type`. `sqlite` is the simplest. It only needs `database_file` and creates its
+   tables itself.
 2. Set `statistics_password` to open the statistics page at `/stats/`.
 3. Copy `web/assets` to a directory of your own, set `assets_path` to it, and add a `settings.json` there:
 
@@ -150,22 +156,22 @@ with a result image, and the statistics page. To turn it on:
     { "telemetry_level": "full" }
     ```
 
-    `basic` stores the results only; `full` also stores the test log shown on the statistics page.
-4. Put your contact address into the privacy policy in `index.html` in place of `krlsv@pm.me`. The policy is shown
-   to users before they start a test.
+    `basic` stores the results only. `full` also stores the test log, which the statistics page shows.
+4. Put your contact address into the privacy policy in `index.html` in place of `krlsv@pm.me`. The page shows the
+   policy before a user starts a test.
 
-A stored test can then be read at:
+You can then open a stored test at:
 
 * `/results/?id=<id>`: the result image, in Ukrainian with `&lang=uk`
 * `/results/json?id=<id>`: the result as JSON
-* `/stats/`: the latest 100 tests, and every detail of a single test. Tests can be deleted there one by one, a
+* `/stats/`: the latest 100 tests, and every detail of a single test. You can delete tests there one by one, a
   selection at a time, or all at once
 
 ### Databases
 
 * **SQLite** and **BoltDB** need nothing but the file, and SQLite runs in WAL mode.
 * For **PostgreSQL**, **MySQL** and **MSSQL**, create the database and import the schema from
-  `database/{postgresql,mysql,mssql}`, e.g. `psql speedtest < database/postgresql/telemetry_postgresql.sql`.
+  `database/{postgresql,mysql,mssql}`, for example `psql speedtest < database/postgresql/telemetry_postgresql.sql`.
 * **MySQL** takes the Go driver's address format in `database_hostname`, not a bare hostname:
 
     ```toml
@@ -176,8 +182,8 @@ A stored test can then be read at:
 
     A bare value such as `localhost` fails at startup with `default addr for network 'localhost' unknown`.
 
-* Results are looked up by `uuid`, so the schemas index that column. Databases created from an older schema need
-  the index added by hand (SQLite gets it on startup):
+* The server looks up results by `uuid`, so the schemas index that column. A database made from an older schema
+  needs the index added by hand, except SQLite, which adds it on startup:
 
     ```sql
     -- PostgreSQL
@@ -192,13 +198,13 @@ A stored test can then be read at:
 ## ISP lookup and privacy
 
 The client's ISP and country come from the API set in `ip_lookup_url`. The `settings.toml` in this repository, and
-so the Docker image, uses [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json); without the key, there are no
-lookups. Only the client's IP address is sent: no API key, cookies or other identifiers. Private and special
-addresses (including CGNAT and IPv6 ULA) are never sent. The client IP is taken from the connection, or from the
-`X-Forwarded-For`, `X-Real-IP`, `Client-IP` and `CF-Connecting-IPv6` headers when a proxy sets them.
+so the Docker image, uses [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json). Without the key, there are no
+lookups. The server sends only the client's IP address, with no API key, cookies or other identifiers. It never
+sends private or special addresses, such as CGNAT and IPv6 ULA ranges. It takes the client IP from the connection,
+or from the `X-Forwarded-For`, `X-Real-IP`, `Client-IP` and `CF-Connecting-IPv6` headers when a proxy sets them.
 
-* To use another API, point `ip_lookup_url` at it. `{ip}` in the URL is replaced with the client's IP, and the
-  response must be JSON with `ip`, `city`, `country`, `iso_code` and `org` fields.
+* To use another API, point `ip_lookup_url` at it. The server replaces `{ip}` in the URL with the client's IP, and
+  the response must be JSON with `ip`, `city`, `country`, `iso_code` and `org` fields.
 * To turn lookups off for everyone, set `ip_lookup_url=""` or leave the key out. To turn them off in the web UI
   only, set `getIp_ispInfo: false` in its settings.
 
@@ -210,12 +216,12 @@ in the top bar changes it. The page texts live in `web/assets/javascript/i18n.js
 
 ## Differences from the PHP backend
 
-* Test IDs are random [ULIDs](https://github.com/ulid/spec) instead of auto-increment numbers, so they cannot be
-  guessed, and `enable_id_obfuscation` is not needed and not supported.
-* The ISP is looked up with an API (see above) instead of ipinfo.io or an offline GeoIP database, so no API key or
-  `.mmdb` file is needed.
-* The distance between client and server is not calculated, so `server_lat`, `server_lng`, `ipinfo_api_key` and
-  `geoip_database_file` are not used.
+* Test IDs are random [ULIDs](https://github.com/ulid/spec) instead of auto-increment numbers, so nobody can guess
+  them. `enable_id_obfuscation` isn't needed and isn't supported.
+* The server looks up the ISP with the API described above instead of ipinfo.io or an offline GeoIP database, so it
+  needs no API key or `.mmdb` file.
+* The server doesn't calculate the distance between client and server, so it ignores `server_lat`, `server_lng`,
+  `ipinfo_api_key` and `geoip_database_file`.
 
 ## License
 
