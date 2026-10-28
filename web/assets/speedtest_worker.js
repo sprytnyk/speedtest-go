@@ -13,6 +13,8 @@ let pingStatus = ""; // ping in milliseconds with 2 decimal digits
 let pingAvgStatus = ""; // average of the pings in milliseconds with 2 decimal digits
 let pingHigh = 0; // highest of the pings in milliseconds
 let jitterStatus = ""; // jitter in milliseconds with 2 decimal digits
+let jitterLow = -1; // smallest change between consecutive pings in milliseconds, -1 until there are two pings
+let jitterHigh = 0; // largest change between consecutive pings in milliseconds
 let clientIp = ""; // client's IP address as reported by getIP.php
 let dlProgress = 0; //progress of download test 0-1
 let ulProgress = 0; //progress of upload test 0-1
@@ -86,12 +88,12 @@ function url_sep(url) {
 /*
 	listener for commands from main thread to this worker.
 	commands:
-	-status: returns the current status as a JSON string containing testState, dlStatus, ulStatus, pingStatus, clientIp, jitterStatus, dlProgress, ulProgress, pingProgress
+	-status: returns the current status as a JSON string containing testState, dlStatus, ulStatus, pingStatus, pingAvgStatus, pingHigh, clientIp, jitterStatus, jitterLow, jitterHigh, dlProgress, ulProgress, pingProgress
 	-abort: aborts the current test
 	-start: starts the test. optionally, settings can be passed as JSON.
 		example: start {"time_ul_max":"10", "time_dl_max":"10", "count_ping":"50"}
 	-latency: the latency the page measured while downloading and uploading, as JSON, sent with the results when telemetry_latency is set
-		example: latency {"download":{"avg":45.6,"jitter":3.2,"low":40.1,"high":60.4}}
+		example: latency {"download":{"avg":45.6,"jitter":3.2,"jitterLow":0.4,"jitterHigh":12.8,"low":40.1,"high":60.4}}
 */
 this.addEventListener("message", function(e) {
 	const params = e.data.split(" ");
@@ -104,8 +106,11 @@ this.addEventListener("message", function(e) {
 				ulStatus: ulStatus,
 				pingStatus: pingStatus,
 				pingAvgStatus: pingAvgStatus,
+				pingHigh: pingHigh,
 				clientIp: clientIp,
 				jitterStatus: jitterStatus,
+				jitterLow: jitterLow,
+				jitterHigh: jitterHigh,
 				dlProgress: dlProgress,
 				ulProgress: ulProgress,
 				pingProgress: pingProgress,
@@ -625,6 +630,7 @@ function pingTest(done) {
 	let prevInstspd = 0; // last ping time, used for jitter calculation
 	let pingSum = 0; // sum of the ping times, for the average
 	let pingCount = 0; // pings measured, which can be fewer than i when errors are ignored
+	let jitterSum = 0; // sum of the changes between consecutive pings, for the jitter
 	xhr = [];
 	// ping function
 	const doPing = function() {
@@ -660,12 +666,15 @@ function pingTest(done) {
 				pingCount++;
 				pingAvgStatus = (pingSum / pingCount).toFixed(2);
 				if (instspd > pingHigh) pingHigh = instspd;
-				if (i === 1) ping = instspd;
+				if (pingCount === 1) ping = instspd;
 				/* first ping, can't tell jitter yet*/ else {
 					if (instspd < ping) ping = instspd; // update ping, if the instant ping is lower
-					if (i === 2) jitter = instjitter;
-					//discard the first jitter measurement because it might be much higher than it should be
-					else jitter = instjitter > jitter ? jitter * 0.3 + instjitter * 0.7 : jitter * 0.8 + instjitter * 0.2; // update jitter, weighted average. spikes in ping values are given more weight.
+					// jitter is the average change between consecutive pings, so a spike counts as much
+					// at the end of the test as at the start, with the smallest and largest change as its range
+					jitterSum += instjitter;
+					jitter = jitterSum / (pingCount - 1);
+					if (jitterLow === -1 || instjitter < jitterLow) jitterLow = instjitter;
+					if (instjitter > jitterHigh) jitterHigh = instjitter;
 				}
 				prevInstspd = instspd;
 			}
@@ -720,6 +729,10 @@ function telemetryExtra() {
 	const avg = parseFloat(pingAvgStatus);
 	if (avg > 0) {
 		latency.idle = { avg: avg, jitter: parseFloat(jitterStatus), low: parseFloat(pingStatus), high: parseFloat(pingHigh.toFixed(2)) };
+		if (jitterLow >= 0) {
+			latency.idle.jitterLow = parseFloat(jitterLow.toFixed(2));
+			latency.idle.jitterHigh = parseFloat(jitterHigh.toFixed(2));
+		}
 	}
 	if (loadedLatency && typeof loadedLatency === "object") {
 		if (loadedLatency.download) latency.download = loadedLatency.download;

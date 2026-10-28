@@ -8,14 +8,18 @@ import (
 // The speed test page stores the latency it measured while idle and while
 // downloading and uploading as "latency" in the extra data:
 //
-//	{"server":"…","latency":{"idle":{"avg":12.3,"jitter":0.4,"low":11.9,"high":13.2},"download":{…},"upload":{…}}}
+//	{"server":"…","latency":{"idle":{"avg":12.3,"jitter":0.4,"jitterLow":0.1,"jitterHigh":1.3,"low":11.9,"high":13.2},"download":{…},"upload":{…}}}
+//
+// Tests stored before the jitter range was added have no jitterLow and jitterHigh.
 
 // LatencyStats is the latency of one phase, in milliseconds.
 type LatencyStats struct {
-	Avg    *float64 `json:"avg"`
-	Jitter *float64 `json:"jitter"`
-	Low    *float64 `json:"low"`
-	High   *float64 `json:"high"`
+	Avg        *float64 `json:"avg"`
+	Jitter     *float64 `json:"jitter"`
+	JitterLow  *float64 `json:"jitterLow"`
+	JitterHigh *float64 `json:"jitterHigh"`
+	Low        *float64 `json:"low"`
+	High       *float64 `json:"high"`
 }
 
 // Latency is the latency of each phase of a test, nil when it was not measured.
@@ -27,9 +31,9 @@ type Latency struct {
 
 // LatencyRow is one phase prepared for the stats page. Values are "--" when missing.
 type LatencyRow struct {
-	Phase                  string // idle, download or upload
-	Label                  string
-	Avg, Jitter, Low, High string
+	Phase                                         string // idle, download or upload
+	Label                                         string
+	Avg, Jitter, JitterLow, JitterHigh, Low, High string
 }
 
 // parseLatency reads the latency from the extra data; ok is false when there is none
@@ -60,12 +64,14 @@ func latencyRows(l Latency) []LatencyRow {
 			continue
 		}
 		rows = append(rows, LatencyRow{
-			Phase:  p.phase,
-			Label:  p.label,
-			Avg:    latencyText(p.stats.Avg, "."),
-			Jitter: latencyText(p.stats.Jitter, "."),
-			Low:    latencyText(p.stats.Low, "."),
-			High:   latencyText(p.stats.High, "."),
+			Phase:      p.phase,
+			Label:      p.label,
+			Avg:        latencyText(p.stats.Avg, "."),
+			Jitter:     latencyText(p.stats.Jitter, "."),
+			JitterLow:  latencyText(p.stats.JitterLow, "."),
+			JitterHigh: latencyText(p.stats.JitterHigh, "."),
+			Low:        latencyText(p.stats.Low, "."),
+			High:       latencyText(p.stats.High, "."),
 		})
 	}
 	return rows

@@ -49,14 +49,14 @@ func TestReadableFields(t *testing.T) {
 }
 
 func TestLatency(t *testing.T) {
-	extra := `{"server":"Kyiv","latency":{"idle":{"avg":13.125,"jitter":0.4,"low":12.4,"high":15},"upload":{"avg":131.5,"jitter":2}}}`
+	extra := `{"server":"Kyiv","latency":{"idle":{"avg":13.125,"jitter":0.4,"jitterLow":0,"jitterHigh":2.6,"low":12.4,"high":15},"upload":{"avg":131.5,"jitter":2}}}`
 	latency, ok := parseLatency(extra)
 	if !ok {
 		t.Fatalf("parseLatency(%q) found no latency", extra)
 	}
 	want := []LatencyRow{
-		{Phase: "idle", Label: "Idle", Avg: "13.1", Jitter: "0.40", Low: "12.4", High: "15.0"},
-		{Phase: "upload", Label: "Upload", Avg: "132", Jitter: "2.00", Low: "--", High: "--"},
+		{Phase: "idle", Label: "Idle", Avg: "13.1", Jitter: "0.40", JitterLow: "0.00", JitterHigh: "2.60", Low: "12.4", High: "15.0"},
+		{Phase: "upload", Label: "Upload", Avg: "132", Jitter: "2.00", JitterLow: "--", JitterHigh: "--", Low: "--", High: "--"},
 	}
 	if got := latencyRows(latency); !reflect.DeepEqual(got, want) {
 		t.Errorf("latencyRows = %+v, want %+v", got, want)

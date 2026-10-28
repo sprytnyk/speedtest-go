@@ -38,7 +38,7 @@ function url_sep(url) {
 }
 
 function newStats() {
-  return { samples: 0, failed: 0, sum: 0, avg: 0, min: -1, max: 0, jitter: 0, loss: 0, prev: 0 };
+  return { samples: 0, failed: 0, sum: 0, avg: 0, min: -1, max: 0, jitter: 0, jitterSum: 0, jitterCount: 0, jitterMin: -1, jitterMax: 0, loss: 0, prev: 0 };
 }
 
 function addPing(s, ms) {
@@ -49,14 +49,15 @@ function addPing(s, ms) {
   if (s.min === -1 || ms < s.min) s.min = ms;
   if (ms > s.max) s.max = ms;
 
-  // jitter calculation (same weighted formula as speedtest_worker.js)
+  // jitter is the average change between consecutive pings, so a spike counts as much
+  // at the end of the test as at the start, with the smallest and largest change as its range
   if (received > 1 && s.prev > 0) {
     const instjitter = Math.abs(ms - s.prev);
-    if (received === 2) {
-      s.jitter = instjitter;
-    } else {
-      s.jitter = instjitter > s.jitter ? s.jitter * 0.3 + instjitter * 0.7 : s.jitter * 0.8 + instjitter * 0.2;
-    }
+    s.jitterSum += instjitter;
+    s.jitterCount++;
+    s.jitter = parseFloat((s.jitterSum / s.jitterCount).toFixed(2));
+    if (s.jitterMin === -1 || instjitter < s.jitterMin) s.jitterMin = instjitter;
+    if (instjitter > s.jitterMax) s.jitterMax = instjitter;
   }
   s.prev = ms;
   s.loss = parseFloat(((s.failed / s.samples) * 100).toFixed(2));
@@ -69,7 +70,17 @@ function addLoss(s) {
 }
 
 function phaseSummary(s) {
-  return { avg: s.avg, min: s.min, max: s.max, jitter: s.jitter, loss: s.loss, samples: s.samples, failed: s.failed };
+  return {
+    avg: s.avg,
+    min: s.min,
+    max: s.max,
+    jitter: s.jitter,
+    jitterMin: s.jitterMin,
+    jitterMax: s.jitterMax,
+    loss: s.loss,
+    samples: s.samples,
+    failed: s.failed
+  };
 }
 
 this.addEventListener("message", function (e) {
@@ -86,6 +97,8 @@ this.addEventListener("message", function (e) {
         minPing: overall.min,
         maxPing: overall.max,
         jitter: overall.jitter,
+        jitterMin: overall.jitterMin,
+        jitterMax: overall.jitterMax,
         packetLoss: overall.loss,
         elapsed: elapsed,
         duration: settings.duration,

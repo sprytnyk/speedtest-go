@@ -445,7 +445,13 @@ function loadedLatencySummary() {
   const summary = {};
   for (const kind of ["download", "upload"]) {
     const stats = testState.loaded[kind];
-    if (stats) summary[kind] = { avg: round(stats.avg), jitter: round(stats.jitter), low: round(stats.min), high: round(stats.max) };
+    if (!stats) continue;
+    summary[kind] = { avg: round(stats.avg), jitter: round(stats.jitter), low: round(stats.min), high: round(stats.max) };
+    // the jitter has a range once two pings came back
+    if (stats.jitterMin >= 0) {
+      summary[kind].jitterLow = round(stats.jitterMin);
+      summary[kind].jitterHigh = round(stats.jitterMax);
+    }
   }
   return summary;
 }
