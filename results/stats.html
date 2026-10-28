@@ -1401,7 +1401,9 @@
                   <dt><span class="dot {{ .Phase }}" aria-hidden="true"></span><span data-i18n="stab.phase.{{ .Phase }}">{{ .Label }}</span></dt>
                   <dd>
                     <span data-num="{{ .Avg }}">{{ .Avg }}</span> <span data-i18n="unit.ms">ms</span>
-                    <span class="latency-detail">· <span data-i18n="stats.latencyJitter">jitter</span> <span data-num="{{ .Jitter }}">{{ .Jitter }}</span> <span data-i18n="unit.ms">ms</span> · <span data-i18n="stats.latencyRange">low–high</span> <span data-num="{{ .Low }}">{{ .Low }}</span>–<span data-num="{{ .High }}">{{ .High }}</span> <span data-i18n="unit.ms">ms</span></span>
+                    {{- if and (ne .Low "--") (ne .High "--") }} <span class="latency-detail" title="Low–high" data-i18n-attr="title:stab.range">(<span data-num="{{ .Low }}">{{ .Low }}</span>–<span data-num="{{ .High }}">{{ .High }}</span>)</span>{{ end }}
+                    <span class="latency-detail">· <span data-i18n="stats.latencyJitter">jitter</span> <span data-num="{{ .Jitter }}">{{ .Jitter }}</span> <span data-i18n="unit.ms">ms</span>
+                      {{- if and (ne .JitterLow "--") (ne .JitterHigh "--") }} <span title="Low–high" data-i18n-attr="title:stab.range">(<span data-num="{{ .JitterLow }}">{{ .JitterLow }}</span>–<span data-num="{{ .JitterHigh }}">{{ .JitterHigh }}</span>)</span>{{ end }}</span>
                   </dd>
                 </div>
                 {{- end }}
