@@ -551,7 +551,7 @@
         color: var(--bad);
       }
 
-      /* Stats: a 12-column grid, three main tiles over four secondary ones */
+      /* Stats: a 12-column grid, three main tiles over two secondary ones */
 
       .stats {
         display: grid;
@@ -560,7 +560,7 @@
       }
 
       .stat {
-        grid-column: span 3;
+        grid-column: span 6;
         background-color: var(--raised);
         border-radius: 0.75rem;
         padding: 0.625rem 0.875rem;
@@ -986,9 +986,6 @@
         .stats {
           gap: 0.625rem;
         }
-        .stat {
-          grid-column: span 6;
-        }
         .stat.main {
           padding: 0.625rem 0.75rem;
         }
@@ -1238,6 +1235,7 @@
                 <p class="stat-label" data-i18n="stab.average">Average</p>
               </div>
               <p class="stat-value"><span id="statAvg">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
+              <p class="stat-sub" id="statAvgRange" title="Low–high" data-i18n-attr="title:stab.range" hidden></p>
             </div>
             <div class="stat main">
               <div class="stat-head">
@@ -1252,14 +1250,6 @@
               </div>
               <p class="stat-value"><span id="statJitter">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
               <p class="stat-sub" id="statJitterRange" title="Low–high" data-i18n-attr="title:stab.range" hidden></p>
-            </div>
-            <div class="stat">
-              <p class="stat-label" data-i18n="stab.min">Min</p>
-              <p class="stat-value"><span id="statMin">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
-            </div>
-            <div class="stat">
-              <p class="stat-label" data-i18n="stab.max">Max</p>
-              <p class="stat-value"><span id="statMax">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
             </div>
             <div class="stat">
               <p class="stat-label" data-i18n="stab.failed">Failed</p>
@@ -1777,8 +1767,9 @@
       }
 
       function resetUI() {
-        var stats = ["statCurrent", "statAvg", "statJitter", "statMin", "statMax", "statLoss", "statSamples"];
+        var stats = ["statCurrent", "statAvg", "statJitter", "statLoss", "statSamples"];
         for (var i = 0; i < stats.length; i++) setStat(stats[i], "--");
+        setRange(I("statAvgRange"), -1, -1);
         setRange(I("statJitterRange"), -1, -1);
         setIdleVerdict("status.ready", "stab.readyText");
         I("downloadCsvBtn").disabled = true;
@@ -1910,8 +1901,7 @@
         var d = latestData;
         setStat("statCurrent", fmt(d.currentPing));
         setStat("statAvg", fmt(d.avgPing));
-        setStat("statMin", d.minPing > 0 ? fmt(d.minPing) : "--");
-        setStat("statMax", fmt(d.maxPing));
+        setRange(I("statAvgRange"), d.minPing, d.maxPing);
         setStat("statJitter", fmt(d.jitter));
         setRange(I("statJitterRange"), d.jitterMin, d.jitterMax);
         setStat("statLoss", d.totalSamples > 0 ? I18N.num(d.packetLoss, 1) : "--");
