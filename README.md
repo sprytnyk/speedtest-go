@@ -142,6 +142,57 @@ To let users choose between test servers, put a `server-list.json` into your `as
 The page pings every server and selects the closest. Without the file, the test runs against the server that
 serves the page.
 
+## Getting accurate results
+
+The numbers in this section come from a 100 Mbps wired line about 45 ms from the server, tested in Brave and
+Chromium.
+
+### Serve the test over HTTP/1.1
+
+Over HTTP/2, the browser sends every download stream through one TCP connection. On that line one connection reached
+30 to 45 Mbps, so the page showed 36 to 42 Mbps. Six HTTP/1.1 connections reached 94 Mbps. The latency under
+load was wrong as well. The page's pings shared the connection and waited behind download data, so they showed 220
+to 350 ms instead of 44 ms.
+
+Over HTTP/1.1 the page downloads with 4 connections and leaves one of the browser's 6 per server for the pings. Keep
+`enable_http2=false` when the server serves TLS itself. Behind Caddy, set the protocols in the global options. The
+setting applies to every site on the same port:
+
+```
+{
+	servers {
+		protocols h1
+	}
+}
+```
+
+HTTP/3 doesn't use one TCP connection either, but the results depended on the browser. Firefox downloaded at 91 to
+105 Mbps, but its pings under load showed 1,050 to 1,300 ms. Brave reached 87 to 95 Mbps when forced onto HTTP/3,
+and 47 to 51 Mbps when it chose HTTP/3 itself.
+
+### Use BBR on the server
+
+Linux uses cubic congestion control by default. When a cubic connection loses packets, it slows down, and at 45 ms
+it takes seconds to speed up again. `time_auto` ends a fast test after 6 to 9 seconds, so the test ended before the
+connections caught up. With BBR, the page's average rose from 62 to 84 Mbps. One connection reached 57 to 90 Mbps,
+up from 30 to 36 Mbps with cubic. To switch, run as root:
+
+```
+echo tcp_bbr > /etc/modules-load.d/bbr.conf
+echo 'net.ipv4.tcp_congestion_control = bbr' > /etc/sysctl.d/60-bbr.conf
+modprobe tcp_bbr
+sysctl -p /etc/sysctl.d/60-bbr.conf
+```
+
+The change applies to new connections. With BBR the latency under load rose from about 60 ms to between 120 and
+150 ms, because the test now fills the line and the line's queue fills with it.
+
+### Keep the grace times
+
+The worker ignores the first 1.5 seconds of the download and 3 seconds of the upload, while connections speed up.
+With `time_dlGraceTime` and `time_ulGraceTime` set to `0` in `settings.json`, the test counts that start. The page's
+average was 49 Mbps with both at `0`, and 62 Mbps with the defaults.
+
 ## Storing results
 
 The server stores a result when the page sends it at the end of a test. That gives every test an ID, the **Share**
