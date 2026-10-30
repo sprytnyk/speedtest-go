@@ -1,7 +1,6 @@
 package web
 
 import (
-	"crypto/tls"
 	"net"
 	"net/http"
 	"time"
@@ -13,16 +12,15 @@ import (
 
 // newServer returns an HTTP server for h. Only reading the request headers is
 // time-limited, since the speed test itself needs long-running bodies.
-func newServer(conf *config.Config, h http.Handler) *http.Server {
-	srv := &http.Server{
+func newServer(h http.Handler) *http.Server {
+	// HTTP/2 would put the download streams and the pings on one TCP connection
+	var protocols http.Protocols
+	protocols.SetHTTP1(true)
+	return &http.Server{
 		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,
+		Protocols:         &protocols,
 	}
-	if conf.EnableTLS && !conf.EnableHTTP2 {
-		// a non-nil empty map disables HTTP/2 over TLS
-		srv.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
-	}
-	return srv
 }
 
 // listenAndServe listens on the configured address, using TLS if enabled.
@@ -30,15 +28,12 @@ func listenAndServe(conf *config.Config, h http.Handler) error {
 	addr := net.JoinHostPort(conf.BindAddress, conf.Port)
 	log.Infof("Starting backend server on %s", addr)
 
-	srv := newServer(conf, h)
+	srv := newServer(h)
 	srv.Addr = addr
 
 	if conf.EnableTLS {
 		log.Info("Use TLS connection.")
 		return srv.ListenAndServeTLS(conf.TLSCertFile, conf.TLSKeyFile)
-	}
-	if conf.EnableHTTP2 {
-		log.Errorf("TLS is mandatory for HTTP/2. Ignore settings that enable HTTP/2.")
 	}
 	return srv.ListenAndServe()
 }

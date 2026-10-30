@@ -109,7 +109,7 @@ func listenProxyProtocol(conf *config.Config, r *chi.Mux) {
 		defer pl.Close()
 
 		log.Infof("Starting proxy protocol listener on %s", addr)
-		log.Fatal(newServer(conf, r).Serve(pl))
+		log.Fatal(newServer(r).Serve(pl))
 	}
 }
 

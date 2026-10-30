@@ -31,7 +31,6 @@ type Config struct {
 	DatabaseFile string `mapstructure:"database_file"`
 	DatabasePort string `mapstructure:"database_port"`
 
-	EnableHTTP2 bool   `mapstructure:"enable_http2"`
 	EnableTLS   bool   `mapstructure:"enable_tls"`
 	TLSCertFile string `mapstructure:"tls_cert_file"`
 	TLSKeyFile  string `mapstructure:"tls_key_file"`
@@ -64,7 +63,6 @@ func init() {
 	viper.SetDefault("database_file", "speedtest.db")
 	viper.SetDefault("database_port", "")
 	viper.SetDefault("enable_tls", false)
-	viper.SetDefault("enable_http2", false)
 	viper.SetDefault("tls_cert_file", "")
 	viper.SetDefault("tls_key_file", "")
 

@@ -25,7 +25,7 @@ func startListener(conf *config.Config, r *chi.Mux) error {
 			log.Errorf("Both an address/port (%s:%s) has been specificed in the config AND externally configured socket activation has been detected", conf.BindAddress, conf.Port)
 			log.Fatal(`Please deconfigure socket activation (e.g. in systemd unit files), or set both 'bind_address' and 'listen_port' to ''`)
 		}
-		return newServer(conf, r).Serve(listeners[0])
+		return newServer(r).Serve(listeners[0])
 	default:
 		log.Fatalf("Asked to listen on %d sockets via systemd activation.  Sorry we currently only support listening on 1 socket.", len(listeners))
 	}

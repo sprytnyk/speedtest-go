@@ -118,7 +118,7 @@ the key in the file.
 | `database_hostname`, `database_port`, `database_name`, `database_username`, `database_password` | Connection settings for MySQL, PostgreSQL and MSSQL. Only MSSQL uses `database_port`. |
 | `statistics_password` | Password of the statistics page. The page stays locked while it is `PASSWORD` or empty. |
 | `redact_ip_addresses` | Store results without the client's IP address and hostname. |
-| `enable_tls`, `enable_http2`, `tls_cert_file`, `tls_key_file` | Serve HTTPS directly. HTTP/2 needs TLS. |
+| `enable_tls`, `tls_cert_file`, `tls_key_file` | Serve HTTPS directly. The server always uses HTTP/1.1. |
 
 ### Multiple servers
 
@@ -154,9 +154,9 @@ Over HTTP/2, the browser sends every download stream through one TCP connection.
 load was wrong as well. The page's pings shared the connection and waited behind download data, so they showed 220
 to 350 ms instead of 44 ms.
 
-Over HTTP/1.1 the page downloads with 4 connections and leaves one of the browser's 6 per server for the pings. Keep
-`enable_http2=false` when the server serves TLS itself. Behind Caddy, set the protocols in the global options. The
-setting applies to every site on the same port:
+Over HTTP/1.1 the page downloads with 4 connections and leaves one of the browser's 6 per server for the pings. The
+server only speaks HTTP/1.1, so this matters behind a reverse proxy. In Caddy, set the protocols in the global
+options. The setting applies to every site on the same port:
 
 ```
 {
