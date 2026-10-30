@@ -168,7 +168,7 @@ function startButtonClickHandler() {
       testState.hoverX = null;
       if (!testState.customStreams) {
         // over HTTP/1.1 browsers open at most 6 connections to a server, so leave room for the latency pings
-        testState.speedtest.setParameter("xhr_dlMultistream", multiplexed(testState.speedtest.getSelectedServer()) ? 6 : 4);
+        testState.speedtest.setParameter("xhr_dlMultistream", 4);
       }
       // the first ping goes out as soon as a transfer starts, instead of waiting for a script over a busy line
       discardReadyWorkers();
@@ -394,20 +394,6 @@ function recordSample(data) {
   }
   if (kind && data[kind + "Status"] !== "" && !isNaN(v)) {
     testState.samples.push({ t, v, kind });
-  }
-}
-
-/**
- * Whether the page reaches the server over HTTP/2 or HTTP/3, where all requests share one connection
- * @param {Object} server - a server object
- */
-function multiplexed(server) {
-  try {
-    if (new URL(server.server, location.href).origin !== location.origin) return false;
-    const navigation = performance.getEntriesByType("navigation")[0];
-    return /^h[23]/.test(navigation.nextHopProtocol);
-  } catch (e) {
-    return false;
   }
 }
 
