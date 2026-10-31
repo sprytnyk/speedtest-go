@@ -279,12 +279,6 @@ or from the `X-Forwarded-For`, `X-Real-IP`, `Client-IP` and `CF-Connecting-IPv6`
 * To turn lookups off for everyone, set `ip_lookup_url=""` or leave the key out. To turn them off in the web UI
   only, set `getIp_ispInfo: false` in its settings.
 
-## Languages
-
-The pages and the result image are in English and Ukrainian. The language follows the browser, and the flag switch
-in the top bar changes it. The page texts live in `web/assets/javascript/i18n.js`, and the result image's labels in
-`imageTexts` in `results/png.go`.
-
 ## Differences from the PHP backend
 
 * Test IDs are random [ULIDs](https://github.com/ulid/spec) instead of auto-increment numbers, so nobody can guess
