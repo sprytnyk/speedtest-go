@@ -145,7 +145,8 @@ serves the page.
 ## Getting accurate results
 
 The numbers in this section come from a 100 Mbps wired line about 45 ms from the server, tested in Brave and
-Chromium.
+Chromium. The article [Self-hosted speed tests need HTTP/1.1 and
+BBR](https://sprytnyk.dev/posts/self-hosted-speed-tests-http1-bbr/) has the full measurements.
 
 ### Serve the test over HTTP/1.1
 
