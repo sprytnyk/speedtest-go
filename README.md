@@ -291,9 +291,9 @@ or from the `X-Forwarded-For`, `X-Real-IP`, `Client-IP` and `CF-Connecting-IPv6`
 
 ## License
 
-Copyright (C) 2016-2020 Federico Dossena
-Copyright (C) 2020 Maddie Zhan
-Copyright (C) 2026 Vladyslav Krylasov
+Copyright (C) 2016-2020 Federico Dossena  
+Copyright (C) 2020 Maddie Zhan  
+Copyright (C) 2026 Vladyslav Krylasov  
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published by
