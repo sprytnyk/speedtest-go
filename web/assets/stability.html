@@ -1235,7 +1235,8 @@
                 <p class="stat-label" data-i18n="stab.average">Average</p>
               </div>
               <p class="stat-value"><span id="statAvg">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
-              <p class="stat-sub" id="statAvgRange" title="Low–high" data-i18n-attr="title:stab.range" hidden></p>
+              <p class="stat-sub" id="statAvgRange" title="Fastest and slowest ping in the whole test" data-i18n-attr="title:stab.tip.range" hidden></p>
+              <p class="stat-sub" id="statAvgPct" title="Half of the pings in the whole test took p50 or less, and 95% took p95 or less" data-i18n-attr="title:stab.tip.pct" hidden></p>
             </div>
             <div class="stat main">
               <div class="stat-head">
@@ -1249,7 +1250,8 @@
                 <p class="stat-label" data-i18n="stab.jitter">Jitter</p>
               </div>
               <p class="stat-value"><span id="statJitter">--</span><span class="stat-unit" data-i18n="unit.ms">ms</span></p>
-              <p class="stat-sub" id="statJitterRange" title="Low–high" data-i18n-attr="title:stab.range" hidden></p>
+              <p class="stat-sub" id="statJitterRange" title="Smallest and largest change between pings in the whole test" data-i18n-attr="title:stab.tip.jitterRange" hidden></p>
+              <p class="stat-sub" id="statJitterPct" title="Half of the changes between pings in the whole test were p50 or less, and 95% were p95 or less" data-i18n-attr="title:stab.tip.jitterPct" hidden></p>
             </div>
             <div class="stat">
               <p class="stat-label" data-i18n="stab.failed">Failed</p>
@@ -1769,8 +1771,8 @@
       function resetUI() {
         var stats = ["statCurrent", "statAvg", "statJitter", "statLoss", "statSamples"];
         for (var i = 0; i < stats.length; i++) setStat(stats[i], "--");
-        setRange(I("statAvgRange"), -1, -1);
-        setRange(I("statJitterRange"), -1, -1);
+        var subs = ["statAvgRange", "statAvgPct", "statJitterRange", "statJitterPct"];
+        for (var j = 0; j < subs.length; j++) setSub(I(subs[j]), "");
         setIdleVerdict("status.ready", "stab.readyText");
         I("downloadCsvBtn").disabled = true;
         setProgress(0, 0, parseInt(I("durationSelect").value));
@@ -1794,13 +1796,21 @@
         return I18N.num(v, v < 10 ? 2 : v < 100 ? 1 : 0);
       }
 
-      // a lowest and highest, where 0 is a real lowest jitter and -1 means not measured yet
+      // like fmt, but 0 is a real value here (the smallest jitter on a quiet link)
+      function fmtZero(v) {
+        return Number(v) === 0 ? I18N.num(0, 2) : fmt(v);
+      }
+
+      // a lowest and highest, where -1 means not measured yet
       function fmtRange(low, high) {
         if (!(low >= 0) || !(high >= 0)) return "";
-        var zero = function (v) {
-          return Number(v) === 0 ? I18N.num(0, 2) : fmt(v);
-        };
-        return zero(low) + "–" + zero(high);
+        return fmtZero(low) + "–" + fmtZero(high);
+      }
+
+      // the median and 95th percentile, where -1 means too few values yet
+      function fmtPct(p50, p95) {
+        if (!(p50 >= 0) || !(p95 >= 0)) return "";
+        return "p50 " + fmtZero(p50) + " · p95 " + fmtZero(p95);
       }
 
       function fmtTime(sec) {
@@ -1901,9 +1911,11 @@
         var d = latestData;
         setStat("statCurrent", fmt(d.currentPing));
         setStat("statAvg", fmt(d.avgPing));
-        setRange(I("statAvgRange"), d.minPing, d.maxPing);
+        setSub(I("statAvgRange"), fmtRange(d.minPing, d.maxPing));
+        setSub(I("statAvgPct"), fmtPct(d.p50, d.p95));
         setStat("statJitter", fmt(d.jitter));
-        setRange(I("statJitterRange"), d.jitterMin, d.jitterMax);
+        setSub(I("statJitterRange"), fmtRange(d.jitterMin, d.jitterMax));
+        setSub(I("statJitterPct"), fmtPct(d.jitterP50, d.jitterP95));
         setStat("statLoss", d.totalSamples > 0 ? I18N.num(d.packetLoss, 1) : "--");
         setStat("statSamples", d.totalSamples > 0 ? String(d.totalSamples) : "--");
         if (loadTest) {
@@ -1917,25 +1929,31 @@
         showVerdict(d);
       }
 
-      // the range under an average, hidden while there is none
-      function setRange(el, low, high) {
-        el.textContent = fmtRange(low, high);
-        el.hidden = !el.textContent;
+      // a small line under an average (range or percentiles), hidden while there is none
+      function setSub(el, text) {
+        el.textContent = text;
+        el.hidden = !text;
       }
 
-      // a table value with its unit, which is left out while there is no value, and its range under it
-      function setCell(cell, text, unit, range) {
+      // a table value with its unit, which is left out while there is no value, and its range and percentiles under it;
+      // tips names the tooltip keys of the two small lines
+      function setCell(cell, text, unit, range, pct, tips) {
         cell.textContent = text;
         if (text === "--") return;
         var u = document.createElement("span");
         u.className = "cell-unit";
         u.textContent = unit;
         cell.appendChild(u);
-        if (!range) return;
+        addCellSub(cell, range, tips[0]);
+        addCellSub(cell, pct, tips[1]);
+      }
+
+      function addCellSub(cell, text, titleKey) {
+        if (!text) return;
         var r = document.createElement("span");
         r.className = "cell-range";
-        r.title = I18N.t("stab.range");
-        r.textContent = range;
+        r.title = I18N.t(titleKey);
+        r.textContent = text;
         cell.appendChild(r);
       }
 
@@ -1946,9 +1964,9 @@
           var p = d && d.phases ? d.phases[n] : null;
           var got = received(p);
           var cells = rows[n].cells;
-          setCell(cells[1], fmt(loadSpeeds[n]), I18N.t("unit.mbps"));
-          setCell(cells[2], got ? fmt(p.avg) : "--", I18N.t("unit.ms"), got ? fmtRange(p.min, p.max) : "");
-          setCell(cells[3], got ? fmt(p.jitter) : "--", I18N.t("unit.ms"), got ? fmtRange(p.jitterMin, p.jitterMax) : "");
+          setCell(cells[1], fmt(loadSpeeds[n]), I18N.t("unit.mbps"), "", "", []);
+          setCell(cells[2], got ? fmt(p.avg) : "--", I18N.t("unit.ms"), got ? fmtRange(p.min, p.max) : "", got ? fmtPct(p.p50, p.p95) : "", ["stab.tip.phaseRange", "stab.tip.phasePct"]);
+          setCell(cells[3], got ? fmt(p.jitter) : "--", I18N.t("unit.ms"), got ? fmtRange(p.jitterMin, p.jitterMax) : "", got ? fmtPct(p.jitterP50, p.jitterP95) : "", ["stab.tip.phaseJitterRange", "stab.tip.phaseJitterPct"]);
           if (running && loadTest && d && d.phase === n) rows[n].setAttribute("aria-current", "step");
           else rows[n].removeAttribute("aria-current");
         }

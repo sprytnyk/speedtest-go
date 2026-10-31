@@ -31,8 +31,8 @@ This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedt
 * Latency and jitter while downloading and uploading
 * Jitter as the average change between consecutive pings, shown with the smallest and largest change
 * IP address, ISP and country of the client
-* Connection stability test at `/stability.html`, with latency over time, jitter, failed requests, an alert threshold
-  and CSV export. It runs idle or under load, where it pings while idle, then downloading, then uploading, and shows
+* Connection stability test at `/stability.html`, with latency over time, jitter, the p50 and p95 of both, failed
+  requests, an alert threshold and CSV export. It runs idle or under load, where it pings while idle, then downloading, then uploading, and shows
   the latency of each phase
 * Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
 * Multiple test servers to choose from
