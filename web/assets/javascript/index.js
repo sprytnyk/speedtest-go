@@ -628,7 +628,7 @@ function setStat(id, text) {
 function setRange(id, low, high) {
   const el = $(id);
   const shown = formatNumber(low) !== "--" && formatNumber(high) !== "--";
-  el.textContent = shown ? formatNumber(low) + "–" + formatNumber(high) : "";
+  el.textContent = shown ? formatNumber(low) + "-" + formatNumber(high) : "";
   el.hidden = !shown;
 }
 

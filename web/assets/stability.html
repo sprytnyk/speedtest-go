@@ -1804,7 +1804,7 @@
       // a lowest and highest, where -1 means not measured yet
       function fmtRange(low, high) {
         if (!(low >= 0) || !(high >= 0)) return "";
-        return fmtZero(low) + "–" + fmtZero(high);
+        return fmtZero(low) + "-" + fmtZero(high);
       }
 
       // the median and 95th percentile, where -1 means too few values yet
