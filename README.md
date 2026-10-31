@@ -188,6 +188,25 @@ sysctl -p /etc/sysctl.d/60-bbr.conf
 The change applies to new connections. With BBR the latency under load rose from about 60 ms to between 120 and
 150 ms, because the test now fills the line and the line's queue fills with it.
 
+### Raise the TCP buffers for fast, distant users
+
+A connection can only send as much data as its buffer holds before the other side confirms it arrived. Its speed
+is limited to about the buffer size divided by the ping. By default Linux lets each connection use up to 4 MB for
+sending and 6 MB for receiving, and keeps part of that for itself. 100 Mbps at 45 ms needs about 0.6 MB, but 1 Gbps
+at 100 ms needs about 12.5 MB. On [#872](https://github.com/librespeed/speedtest/issues/872#issuecomment-6362608909),
+a user fixed slow results on a very fast connection by raising the buffers along with BBR. The test uses several
+connections, so 16 MB each is enough for 1 Gbps at well over 100 ms. To raise them, run as root:
+
+```
+cat > /etc/sysctl.d/60-tcp-buffers.conf <<'EOF'
+net.ipv4.tcp_rmem = 4096 131072 16777216
+net.ipv4.tcp_wmem = 4096 16384 16777216
+EOF
+sysctl -p /etc/sysctl.d/60-tcp-buffers.conf
+```
+
+The `net.ipv4` settings cover IPv6 too.
+
 ### Keep the grace times
 
 The worker ignores the first 1.5 seconds of the download and 3 seconds of the upload, while connections speed up.
