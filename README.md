@@ -220,7 +220,8 @@ button with a result image, and the statistics page. To turn it on:
 
 1. Choose a database with `database_type`. `sqlite` is the simplest. It only needs `database_file` and creates its
    tables itself.
-2. Set `statistics_password` to open the statistics page at `/stats/`.
+2. Set `statistics_password` to open the statistics page at `/stats/`. The page stays locked while it is `PASSWORD`,
+   the default.
 3. Copy `web/assets` to a directory of your own, set `assets_path` to it, and add a `settings.json` there:
 
     ```json
@@ -228,8 +229,8 @@ button with a result image, and the statistics page. To turn it on:
     ```
 
     `basic` stores the results only. `full` also stores the test log, which the statistics page shows.
-4. Put your contact address into the privacy policy in `index.html` in place of `krlsv@pm.me`. The page shows the
-   policy before a user starts a test.
+4. Put your contact address into the privacy policy in `index.html` in place of `krlsv@pm.me`. The page shows a note
+   above the start button that links to the policy.
 
 You can then open a stored test at:
 
