@@ -8,28 +8,31 @@ work together, with the 60 s test as the example.
 
 ```mermaid
 flowchart TB
-  Page["<b>Page</b><br/>Phase timer starts each phase on the clock<br/>Status timer asks both workers what is new every 200 ms<br/>Chart redraws when new pings arrive"]
+  Page["<b>Page</b><br/>Phase timer starts each phase on the clock<br/>Status timer asks both workers what is new every 200 ms<br/>Chart redraws after each answer"]
   Ping["<b>Ping worker</b><br/>Runs for the whole test<br/>Keeps the numbers and leaves warm-up pings out"]
   Speed["<b>Speed worker</b><br/>A new one for each download or upload phase<br/>Says when its warm-up is over"]
   Srv[("Test server")]
+  Ext[("Outside site, such as Google")]
 
   Page -->|"start, stop, which phase, warm-up on or off"| Ping
   Ping -->|"new pings and numbers"| Page
   Page -->|"start a download or an upload"| Speed
   Speed -->|"speed, and whether it is still warming up"| Page
   Ping <-->|"one ping at a time, at most 5 a second"| Srv
+  Ping -.->|"or, if picked as the ping target"| Ext
   Speed <-->|"4 download streams, or 3 upload streams"| Srv
 ```
 
 The page is `web/assets/stability/index.html`. The ping worker is `stability_worker.js`, and the speed worker is
-`speedtest_worker.js`, the one the speed test page uses.
+`speedtest_worker.js`. The speed test page uses both workers too. It runs its download and upload with the speed
+worker, and measures the latency under load with the ping worker. So a change to either worker changes both pages.
 
 The page sends the workers short text messages:
 
 | Message | Sent to | What it means |
 |---|---|---|
 | `start {settings}` | both workers | Start, with these settings. |
-| `status` | both workers | Send what is new since the last time. |
+| `status` | both workers | Send your latest state. The ping worker sends only the pings since the last time. |
 | `phase 1 0` | ping worker | The download starts. Pings from now on go into the download row, and each waits as long as it takes. The 1 is the phase, the 0 is the ping timeout, and a timeout of 0 means none. |
 | `phase 2 0` | ping worker | The upload starts. The same, for the upload row. |
 | `warmup 1` | ping worker | The transfer is warming up. |
@@ -42,7 +45,7 @@ The ping worker starts in the idle phase, so the page never sends `phase 0`.
 ## 2. A 60 s test of idle, download and upload
 
 With Load set to "Idle, download and upload", each phase gets a third of the time and starts on the clock. The warm-up
-takes part of its phase, so the test still ends at 60 s.
+takes part of its phase, so the upload still stops at 60 s.
 
 ```mermaid
 gantt
@@ -54,8 +57,8 @@ gantt
   Download                     :p1, 00:20, 20s
   Upload                       :p2, 00:40, 20s
   section Warm-up, chart only
-  Download warm-up, about 1.6 s :crit, w1, 00:20, 1600ms
-  Upload warm-up, about 3.3 s   :crit, w2, 00:40, 3300ms
+  Download warm-up, 1.6 to 1.8 s :crit, w1, 00:20, 1700ms
+  Upload warm-up, 3.1 to 3.3 s   :crit, w2, 00:40, 3200ms
   section Ping worker
   Pings, 5 s timeout           :q0, 00:00, 20s
   Pings, no timeout            :q1, 00:20, 40s
@@ -63,7 +66,8 @@ gantt
 ```
 
 With Load set to Download or Upload, the test is one phase of the full 60 s, with its warm-up at the start. With Load
-set to Idle, the page starts no phase timer and no speed worker, and the ping worker stops by itself at 60 s.
+set to Idle, the page starts no phase timer and no speed worker, and the ping worker stops by itself at 60 s. A ping on
+its way at 60 s still gets its 5 s timeout to come back, so an Idle test can run a little past 60 s.
 
 ## 3. The download phase
 
@@ -80,7 +84,7 @@ sequenceDiagram
   P->>W: Now download. Wait for each ping as long as it takes.
   Note over W: New pings go into the download row of the table.<br/>A busy line can hold a ping for seconds. That is<br/>latency under load, so it does not count as lost.
   P->>W: Warm-up on
-  Note over W: Pings still go on the chart, hatched,<br/>but stay out of the numbers.<br/>Forgets the last ping, so the step up from idle<br/>latency to latency under load is not jitter.
+  Note over W: Pings still go on the chart, on a hatched band,<br/>but stay out of the numbers.<br/>Forgets the last ping, so the step up from idle<br/>latency to latency under load is not jitter.
   P->>S: Start a download with 4 streams
   Note over P: Sets the phase timer for 40 s
   Note over S: The 1.5 s grace time starts. The download<br/>speeds up, and its speed does not count yet.
@@ -107,15 +111,15 @@ sequenceDiagram
   end
 
   Note over P: 40 s. The phase timer fires.
-  P->>S: Stop
-  Note over S: The page closes this speed worker.<br/>The upload phase starts a new one.
+  P->>S: Close the speed worker
+  Note over S: The upload phase starts a new one.
 ```
 
 The page never sets the warm-up length. It waits for the speed worker to say the warm-up is over, so the warm-up follows
 `time_dlGraceTime` and `time_ulGraceTime`, the same grace times the speed test uses.
 
-The upload phase, from 40 to 60 s, takes the same steps with two differences. Its grace time is 3 s, so its warm-up
-lasts about 3.3 s. And it is the last phase, so at 60 s the test ends.
+The upload phase, from 40 to 60 s, takes the same steps with two differences. Its grace time is 3 s, and the speed worker
+sends one empty upload before it starts, so its warm-up lasts about 3.1 to 3.3 s. And it is the last phase, so at 60 s the test ends.
 
 The ping worker sends one ping at a time and waits for its answer before it sends the next. So at 60 s a ping is
 usually still on its way:
@@ -131,8 +135,8 @@ to 2 s for that ping. If it comes back in time, it counts in the upload row, bec
 upload. If it doesn't, the worker drops it, and it doesn't count as lost. Then the test stops. The speed test page gives
 its last ping 2 s too.
 
-If a transfer stops before its phase is over, for example because it fails, the speed worker says it is finished. The
-page then starts the next phase at once instead of waiting for the timer.
+If a transfer stops before its phase is over, the speed worker says it is finished, and the page starts the next phase
+at once. This shouldn't happen. A stream that fails starts again, and each transfer is set to run longer than its phase.
 
 ## 4. What happens to each ping
 
@@ -141,7 +145,7 @@ flowchart TD
   Send["Send a ping and note whether the warm-up is on"] --> Back{"Did it come back?"}
   Back -->|"yes"| Time["Time it"]
   Back -->|"no, an error or a timeout"| Lost["Mark it lost"]
-  Time --> Warm{"Was the warm-up on when it was sent, or is it on now?"}
+  Time --> Warm{"Was a warm-up on at any time while it was on its way?"}
   Lost --> Warm
   Warm -->|"yes"| Chart["Chart only. Hatched on the chart, and warmup = 1 in the CSV."]
   Warm -->|"no"| Count["Counts in the overall numbers and in this phase's numbers"]
@@ -150,18 +154,21 @@ flowchart TD
   Wait --> Send
 ```
 
-A ping counts only if the warm-up was off both when the worker sent it and when it came back. Here the download's
-warm-up ends at about 21.6 s:
+A ping counts only if no warm-up was on at any time while it was on its way. Here the download's warm-up runs from
+20 s to about 21.6 s:
 
-| Ping | Sent | Answered | Warm-up on when sent | Warm-up on when answered | Counted |
-|---|---|---|---|---|---|
-| A | 21.3 s | 21.5 s | yes | yes | no |
-| B | 21.5 s | 21.9 s | yes | no | no |
-| C | 21.9 s | 21.95 s | no | no | yes |
+| Ping | Sent | Answered | Counted | Why |
+|---|---|---|---|---|
+| A | 21.3 s | 21.5 s | no | It was sent and answered during the warm-up. |
+| B | 21.5 s | 21.9 s | no | It was sent during the warm-up. |
+| C | 21.9 s | 21.95 s | yes | It was sent after the warm-up. |
+| D | 19.9 s | 20.2 s | no | It was answered during the warm-up. |
+| E | 19.9 s | 21.7 s | no | The warm-up started and ended while it was on its way. |
 
 Ping B spent most of its 400 ms stuck behind the warm-up. If the worker only checked the warm-up when the answer came
-back, B would count, and a warm-up spike would go into the download numbers. The same check works when a warm-up starts.
-A ping sent at 19.9 s, before the warm-up, and answered at 20.2 s, during it, stays out too.
+back, B would count, and a warm-up spike would go into the download numbers. Ping E took 1.8 s because the warm-up filled
+the line. The warm-up was off both when E was sent and when it came back, but the worker counts the warm-ups, so it can
+tell that one started in between.
 
 Jitter is the average change from one counted ping to the next. Say the last idle ping is 20 ms and the first ping after
 the download's warm-up is 60 ms. That 40 ms change is the step up to latency under load, and the phase table already
