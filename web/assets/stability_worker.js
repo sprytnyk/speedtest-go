@@ -15,6 +15,7 @@ let overall = newStats();
 let phase = 0;
 let phases = [newStats()];
 let warmup = false; // the page's download or upload is warming up: pings are kept for the chart but left out of the numbers
+let warmups = 0; // how many warm-ups have started, so a ping that was on its way when one started is part of it
 
 let pingData = []; // all ping data points {t: elapsedMs, ping: ms, lost: bool, phase: n, warmup: bool}
 let lastReportedIndex = 0; // for delta delivery
@@ -31,6 +32,7 @@ let settings = {
 };
 
 let xhr = null;
+let pingController = null; // aborts the external ping on its way
 let pinging = false; // a ping is on its way
 let finishing = false; // the page sent "finish" and the ping on its way gets finish_grace to come back
 let startTime = 0;
@@ -169,6 +171,7 @@ this.addEventListener("message", function (e) {
     // "warmup 1" while the transfer ramps up, "warmup 0" once it counts; the change across the warm-up is no jitter
     warmup = params[1] === "1";
     if (warmup) {
+      warmups++;
       overall.prev = 0;
       phases[phase].prev = 0;
     }
@@ -185,11 +188,7 @@ this.addEventListener("message", function (e) {
     if (testState >= 4) return;
     aborted = true;
     testState = 5;
-    if (xhr) {
-      try {
-        xhr.abort();
-      } catch (e) {}
-    }
+    stopPing();
   }
 });
 
@@ -197,23 +196,38 @@ function finish() {
   if (testState >= 4) return;
   testState = 4;
   progress = 1;
+  stopPing();
+}
+
+// abort the ping on its way, which fires no error, so it isn't counted as lost
+function stopPing() {
   if (xhr) {
     try {
       xhr.abort();
     } catch (e) {}
   }
+  if (pingController) pingController.abort();
 }
 
-// a ping sent or answered during a warm-up is part of it: one sent while the transfer ramps up can come back after
-function recordPing(instspd, sentInWarmup) {
-  const inWarmup = warmup || sentInWarmup;
+// what a ping needs to know at the end about the warm-ups when it was sent
+function sentMark() {
+  return { warmup: warmup, warmups: warmups };
+}
+
+// a ping is part of a warm-up if one was on when it was sent, is on when it ends, or started while it was on its way
+function inWarmup(sent) {
+  return warmup || sent.warmup || warmups !== sent.warmups;
+}
+
+function recordPing(instspd, sent) {
+  const warm = inWarmup(sent);
   // guard against 0ms pings
   if (instspd < 1) instspd = prevInstspd;
   if (instspd < 1) instspd = 1;
   prevInstspd = instspd;
 
   currentPing = instspd;
-  if (!inWarmup) {
+  if (!warm) {
     addPing(overall, instspd);
     addPing(phases[phase], instspd);
   }
@@ -221,18 +235,18 @@ function recordPing(instspd, sentInWarmup) {
   // record data point
   const now = new Date().getTime();
   elapsed = (now - startTime) / 1000;
-  pingData.push({ t: elapsed, ping: parseFloat(instspd.toFixed(2)), lost: false, phase: phase, warmup: inWarmup });
+  pingData.push({ t: elapsed, ping: parseFloat(instspd.toFixed(2)), lost: false, phase: phase, warmup: warm });
 }
 
-function recordLoss(sentInWarmup) {
-  const inWarmup = warmup || sentInWarmup;
+function recordLoss(sent) {
+  const warm = inWarmup(sent);
   const now = new Date().getTime();
-  if (!inWarmup) {
+  if (!warm) {
     addLoss(overall);
     addLoss(phases[phase]);
   }
   elapsed = (now - startTime) / 1000;
-  pingData.push({ t: elapsed, ping: 0, lost: true, phase: phase, warmup: inWarmup });
+  pingData.push({ t: elapsed, ping: 0, lost: true, phase: phase, warmup: warm });
 }
 
 // pace pings to avoid excessive sample rates on low-latency links
@@ -267,7 +281,7 @@ function doPing() {
   }
 
   const prevT = new Date().getTime();
-  const sentInWarmup = warmup;
+  const sent = sentMark();
   xhr = new XMLHttpRequest();
   xhr.onload = function () {
     pinging = false;
@@ -291,14 +305,14 @@ function doPing() {
       }
     }
 
-    recordPing(instspd, sentInWarmup);
+    recordPing(instspd, sent);
     if (finishing) finish();
     else schedulePing(instspd);
   };
   xhr.onerror = function () {
     pinging = false;
     if (aborted || testState >= 4) return;
-    recordLoss(sentInWarmup);
+    recordLoss(sent);
     if (finishing) finish();
     else schedulePing(0);
   };
@@ -318,19 +332,17 @@ function doPing() {
 // ping an external host using fetch with no-cors (opaque response, but timing still works)
 function doPingExternal() {
   const prevT = new Date().getTime();
-  const sentInWarmup = warmup;
-  // a ping timeout of 0 waits as long as the ping takes, up to the end of a test with a fixed duration
-  const remainingMs = settings.duration > 0 ? Math.max(1, settings.duration * 1000 - (prevT - startTime)) : 0;
-  const limits = [settings.ping_timeout, remainingMs].filter(function (ms) {
-    return ms > 0;
-  });
-  const timeoutMs = limits.length > 0 ? Math.min.apply(null, limits) : 0;
+  const sent = sentMark();
+  // as over XHR, a ping on its way at the end of a test with a fixed duration still gets its timeout to come back,
+  // and a timeout of 0 waits as long as the ping takes
+  const timeoutMs = settings.ping_timeout;
   // no cache-busting parameter: "no-store" already skips the browser cache, and a unique URL would push
   // every ping past the target's CDN edge to its origin, measuring their backend instead of the connection
   const url = settings.url_ping_external;
 
   let timeoutId = null;
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  pingController = controller;
   const fetchOptions = { mode: "no-cors", cache: "no-store" };
   if (controller) fetchOptions.signal = controller.signal;
 
@@ -342,18 +354,26 @@ function doPingExternal() {
     }, timeoutMs);
   });
 
+  // the page's "finish" gives this ping finish_grace to come back, as over XHR
+  pinging = true;
   Promise.race([fetch(url, fetchOptions), timeout])
     .then(function () {
       if (timeoutId) clearTimeout(timeoutId);
+      pinging = false;
+      pingController = null;
       if (aborted || testState >= 4) return;
       const instspd = new Date().getTime() - prevT;
-      recordPing(instspd, sentInWarmup);
-      schedulePing(instspd);
+      recordPing(instspd, sent);
+      if (finishing) finish();
+      else schedulePing(instspd);
     })
     .catch(function () {
       if (timeoutId) clearTimeout(timeoutId);
+      pinging = false;
+      pingController = null;
       if (aborted || testState >= 4) return;
-      recordLoss(sentInWarmup);
-      schedulePing(0);
+      recordLoss(sent);
+      if (finishing) finish();
+      else schedulePing(0);
     });
 }

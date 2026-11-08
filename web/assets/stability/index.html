@@ -1766,7 +1766,7 @@
           loadSpeeds[n] = n === 1 ? data.dlStatus : data.ulStatus;
           var transferring = data.testState === 1 || data.testState === 3;
           if (loadWarming && ((transferring && !data.warmingUp) || data.testState >= 4)) endWarmup();
-          // a transfer that ends early, such as a failed one, moves the test on to the next phase
+          // a transfer that ends before its phase, which its settings make unlikely, moves the test on to the next phase
           if (data.testState >= 4) startPhase(phaseIndex + 1);
           dirty = true;
         };
