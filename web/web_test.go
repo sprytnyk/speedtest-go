@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -37,6 +38,30 @@ func TestRoutesWithSlash(t *testing.T) {
 						t.Errorf("%s %s is not routed to an endpoint", route.method, path)
 					}
 				}
+			}
+		}
+	}
+}
+
+func TestStabilityPage(t *testing.T) {
+	for _, baseURL := range []string{"", "/speedtest"} {
+		r := newRouter(&config.Config{BaseURL: baseURL})
+		pages := []struct {
+			path, location string
+			status         int
+		}{
+			{"/stability/", "", http.StatusOK},
+			{"/stability", "stability/", http.StatusMovedPermanently},
+			{"/stability.html", "", http.StatusNotFound},
+		}
+		for _, page := range pages {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, baseURL+page.path, nil))
+			if w.Code != page.status {
+				t.Errorf("GET %s: status %d, want %d", baseURL+page.path, w.Code, page.status)
+			}
+			if got := w.Header().Get("Location"); got != page.location {
+				t.Errorf("GET %s: redirects to %q, want %q", baseURL+page.path, got, page.location)
 			}
 		}
 	}

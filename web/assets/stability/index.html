@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Measure latency, jitter and failed requests over time, idle or under load." />
     <meta name="theme-color" content="#0f172a" />
-    <link rel="icon" href="images/favicon.svg" />
+    <link rel="icon" href="../images/favicon.svg" />
     <title data-i18n="stab.title">LibreSpeed - Stability Test</title>
-    <script type="text/javascript" src="javascript/i18n.js"></script>
+    <script type="text/javascript" src="../javascript/i18n.js"></script>
     <style>
       :root {
         color-scheme: dark;
@@ -1086,7 +1086,7 @@
           </div>
         </div>
         <div class="topbar-actions">
-        <a class="back" href="./">
+        <a class="back" href="../">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="m12 19-7-7 7-7"></path>
             <path d="M19 12H5"></path>
@@ -1206,7 +1206,7 @@
         </section>
 
         <footer class="footer">
-          <p><a href="./">LibreSpeed</a> · <a href="https://github.com/sprytnyk/speedtest-go" data-i18n="footer.source">Source code</a></p>
+          <p><a href="../">LibreSpeed</a> · <a href="https://github.com/sprytnyk/speedtest-go" data-i18n="footer.source">Source code</a></p>
         </footer>
       </div>
 
@@ -1346,7 +1346,7 @@
 
       // Server configuration (same pattern as index.html)
       // Set this to a different URL to load the server list from another location.
-      var SPEEDTEST_SERVERS = "server-list.json";
+      var SPEEDTEST_SERVERS = "../server-list.json";
 
       // State
       var worker = null;
@@ -1438,11 +1438,18 @@
           } catch (e) {}
 
           if (loadedServers !== null) {
+            // the page is one folder down from the site's root. Read a relative server address from the root, as the main page does
+            var root = new URL("../", location.href).href;
+            for (var i = 0; i < loadedServers.length; i++) {
+              try {
+                loadedServers[i].server = new URL(loadedServers[i].server || "", root).href;
+              } catch (e) {}
+            }
             SPEEDTEST_SERVERS = loadedServers;
             callback();
           } else if (!xhr._fallbackTried) {
             xhr._fallbackTried = true;
-            xhr.open("GET", "servers.json?r=" + Math.random());
+            xhr.open("GET", "../servers.json?r=" + Math.random());
             xhr.send();
           } else {
             SPEEDTEST_SERVERS = [];
@@ -1455,7 +1462,7 @@
             callback();
           } else {
             xhr._fallbackTried = true;
-            xhr.open("GET", "servers.json?r=" + Math.random());
+            xhr.open("GET", "../servers.json?r=" + Math.random());
             xhr.send();
           }
         };
@@ -1624,7 +1631,7 @@
           workerSettings.mpot = true;
         }
 
-        var currentWorker = new Worker("stability_worker.js?r=" + Math.random());
+        var currentWorker = new Worker("../stability_worker.js?r=" + Math.random());
         worker = currentWorker;
         worker.onmessage = function (e) {
           if (worker !== currentWorker) return;
@@ -1690,7 +1697,7 @@
           loadSettings.mpot = true;
         }
 
-        var currentLoadWorker = new Worker("speedtest_worker.js?r=" + Math.random());
+        var currentLoadWorker = new Worker("../speedtest_worker.js?r=" + Math.random());
         loadWorker = currentLoadWorker;
         loadWorker.onmessage = function (e) {
           if (loadWorker !== currentLoadWorker) return;
