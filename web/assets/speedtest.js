@@ -35,6 +35,7 @@
             - dlProgress: progress of the download test as a float 0-1
             - ulProgress: progress of the upload test as a float 0-1
             - pingProgress: progress of the ping/jitter test as a float 0-1
+            - warmingUp: true while the download or upload is in its grace time, which its speed leaves out
             - testState: state of the test (-1=not started, 0=starting, 1=download test, 2=ping+jitter test, 3=upload test, 4=finished, 5=aborted)
             - clientIp: IP address of the client performing the test (and optionally ISP and country)
         At the end of the test, the onend function will be called, with a boolean specifying whether the test was aborted or if it ended normally.

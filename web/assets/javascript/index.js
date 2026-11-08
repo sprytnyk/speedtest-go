@@ -402,10 +402,11 @@ function recordSample(data) {
  * @param {Object} data - status update from the speedtest worker
  */
 function trackLoadedLatency(data) {
-  // the worker keeps its state through the pause after a transfer, but the transfer's progress is 1 by then
+  // the worker keeps its state through the pause after a transfer, but the transfer's progress is 1 by then;
+  // the pings wait out the transfer's warm-up, which its speed leaves out too, so both measure the settled line
   let kind = null;
-  if (data.testState === 1 && Number(data.dlProgress) < 1) kind = "download";
-  else if (data.testState === 3 && Number(data.ulProgress) < 1) kind = "upload";
+  if (!data.warmingUp && data.testState === 1 && Number(data.dlProgress) < 1) kind = "download";
+  else if (!data.warmingUp && data.testState === 3 && Number(data.ulProgress) < 1) kind = "upload";
   if (kind === testState.latencyKind) return;
 
   stopLatencyWorker();

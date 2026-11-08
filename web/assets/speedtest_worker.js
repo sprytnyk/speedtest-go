@@ -19,6 +19,7 @@ let clientIp = ""; // client's IP address as reported by getIP.php
 let dlProgress = 0; //progress of download test 0-1
 let ulProgress = 0; //progress of upload test 0-1
 let pingProgress = 0; //progress of ping+jitter test 0-1
+let warmingUp = false; // true while the download or upload is in its grace time, which its speed leaves out
 let testId = null; //test ID (sent back by telemetry if used, null otherwise)
 let loadedLatency = null; // latency the page measured while downloading and uploading, sent with the results
 let latencyArrived = null; // called when the page sends the latency after the tests are done
@@ -114,6 +115,7 @@ this.addEventListener("message", function(e) {
 				dlProgress: dlProgress,
 				ulProgress: ulProgress,
 				pingProgress: pingProgress,
+				warmingUp: warmingUp,
 				testId: testId
 			})
 		);
@@ -355,6 +357,7 @@ function dlTest(done) {
 	tverb("dlTest");
 	if (dlCalled) return;
 	else dlCalled = true; // dlTest already called?
+	warmingUp = true;
 	let totLoaded = 0.0, // total number of loaded bytes
 		startT = new Date().getTime(), // timestamp when test was started
 		bonusT = 0, //how many milliseconds the test has been shortened by (higher on faster connections)
@@ -432,6 +435,7 @@ function dlTest(done) {
 						totLoaded = 0.0;
 					}
 					graceTimeDone = true;
+					warmingUp = false;
 				}
 			} else {
 				const speed = totLoaded / (t / 1000.0);
@@ -448,6 +452,7 @@ function dlTest(done) {
 					clearRequests();
 					clearInterval(interval);
 					dlProgress = 1;
+					warmingUp = false;
 					tlog("dlTest: " + dlStatus + ", took " + (new Date().getTime() - startT) + "ms");
 					done();
 				}
@@ -462,6 +467,7 @@ function ulTest(done) {
 	tverb("ulTest");
 	if (ulCalled) return;
 	else ulCalled = true; // ulTest already called?
+	warmingUp = true;
 	// garbage data for upload test
 	let r = new ArrayBuffer(1048576);
 	const maxInt = Math.pow(2, 32) - 1;
@@ -580,6 +586,7 @@ function ulTest(done) {
 							totLoaded = 0.0;
 						}
 						graceTimeDone = true;
+						warmingUp = false;
 					}
 				} else {
 					const speed = totLoaded / (t / 1000.0);
@@ -596,6 +603,7 @@ function ulTest(done) {
 						clearRequests();
 						clearInterval(interval);
 						ulProgress = 1;
+						warmingUp = false;
 						tlog("ulTest: " + ulStatus + ", took " + (new Date().getTime() - startT) + "ms");
 						done();
 					}
