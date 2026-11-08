@@ -38,6 +38,7 @@ This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedt
 * Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
 * Multiple test servers to choose from
 * English and Ukrainian, picked from the browser's language or a switch on every page
+* The running version next to the source code link on every page, linked to its release page. `/version` returns it as JSON
 * Layouts for desktop and phone
 * Optional IP redaction for stored results
 * Supports the [PROXY protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt)

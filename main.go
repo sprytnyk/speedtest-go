@@ -29,6 +29,7 @@ func main() {
 		return
 	}
 	log.Infof("speedtest-go %s", version)
+	config.Version = version
 	conf := config.Load(*optConfig)
 	results.Initialize(&conf)
 	database.SetDBInfo(&conf)

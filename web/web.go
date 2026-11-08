@@ -84,6 +84,7 @@ func newRouter(conf *config.Config) *chi.Mux {
 		withSlash(r.Post, prefix+"/results/telemetry", results.Record)
 		withSlash(r.Get, prefix+"/results/json", results.JSONResult)
 		withSlash(r.HandleFunc, prefix+"/stats", results.Stats)
+		withSlash(r.Get, prefix+"/version", versionInfo)
 
 		// PHP frontend default values compatibility
 		withSlash(r.HandleFunc, prefix+"/empty.php", empty)
@@ -187,6 +188,17 @@ func garbage(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+}
+
+// versionInfo returns the running speedtest-go version for the page footers.
+// It sends the version, the label the footer shows, and the release page when
+// the build is a release.
+func versionInfo(w http.ResponseWriter, r *http.Request) {
+	render.JSON(w, r, struct {
+		Version string `json:"version"`
+		Label   string `json:"label"`
+		URL     string `json:"url,omitempty"`
+	}{config.Version, config.VersionLabel(), config.ReleaseURL()})
 }
 
 func getIP(w http.ResponseWriter, r *http.Request) {

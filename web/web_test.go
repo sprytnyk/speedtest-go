@@ -20,6 +20,7 @@ func TestRoutesWithSlash(t *testing.T) {
 		{http.MethodPost, "/results/telemetry"},
 		{http.MethodGet, "/results/json"},
 		{http.MethodGet, "/stats"},
+		{http.MethodGet, "/version"},
 		{http.MethodPost, "/empty.php"},
 		{http.MethodGet, "/garbage.php"},
 		{http.MethodGet, "/getIP.php"},
@@ -63,6 +64,25 @@ func TestStabilityPage(t *testing.T) {
 			if got := w.Header().Get("Location"); got != page.location {
 				t.Errorf("GET %s: redirects to %q, want %q", baseURL+page.path, got, page.location)
 			}
+		}
+	}
+}
+
+func TestVersionInfo(t *testing.T) {
+	defer func(v string) { config.Version = v }(config.Version)
+	versions := []struct{ version, body string }{
+		{"4.1.0", `{"version":"4.1.0","label":"v4.1.0","url":"https://github.com/sprytnyk/speedtest-go/releases/tag/v4.1.0"}`},
+		{"v4.1.0", `{"version":"v4.1.0","label":"v4.1.0","url":"https://github.com/sprytnyk/speedtest-go/releases/tag/v4.1.0"}`},
+		{"4.1.0-2-g1e02090-dirty", `{"version":"4.1.0-2-g1e02090-dirty","label":"v4.1.0-2-g1e02090-dirty"}`},
+		{"dev", `{"version":"dev","label":"dev"}`},
+	}
+	r := newRouter(&config.Config{})
+	for _, v := range versions {
+		config.Version = v.version
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/backend/version", nil))
+		if got := strings.TrimSpace(w.Body.String()); w.Code != http.StatusOK || got != v.body {
+			t.Errorf("version %s: got %d %s, want %s", v.version, w.Code, got, v.body)
 		}
 	}
 }

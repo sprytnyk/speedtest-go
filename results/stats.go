@@ -28,6 +28,8 @@ import (
 // StatsData is what the stats page template renders.
 type StatsData struct {
 	BaseURL     string // ends with a slash, for links that work from /stats/ and /backend/stats/ alike
+	Version     string // the running speedtest-go version, as the footer shows it
+	ReleaseURL  string // the running release's page, empty for a build that is not a release
 	Disabled    bool   // database_type is none
 	NoPassword  bool   // statistics_password is not set
 	LoggedIn    bool
@@ -102,7 +104,7 @@ func initStatsSession(c *config.Config) {
 
 func Stats(w http.ResponseWriter, r *http.Request) {
 	conf := config.LoadedConfig()
-	data := StatsData{BaseURL: conf.BaseURL + "/"}
+	data := StatsData{BaseURL: conf.BaseURL + "/", Version: config.VersionLabel(), ReleaseURL: config.ReleaseURL()}
 	status := http.StatusOK
 
 	switch {

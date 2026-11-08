@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"net/url"
+	"regexp"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -38,6 +39,37 @@ type Config struct {
 
 // IPLookupPlaceholder is replaced with the client's IP in ip_lookup_url.
 const IPLookupPlaceholder = "{ip}"
+
+// SourceURL is where the source code and the releases are.
+const SourceURL = "https://github.com/sprytnyk/speedtest-go"
+
+// Version is the running build's version, which main sets from its own,
+// e.g. "4.1.0", "4.1.0-2-g1e02090" between releases, or "dev". The Docker
+// image gets the tag itself, with its "v": "v4.1.0".
+var Version = "dev"
+
+// releaseVersion matches a version that is a release, with or without the
+// tag's "v", as opposed to a build between releases or a dev build.
+var releaseVersion = regexp.MustCompile(`^v?(\d+\.\d+\.\d+)$`)
+
+// VersionLabel is the version as the pages show it, with a "v" before a
+// number like the release tags have.
+func VersionLabel() string {
+	if Version != "" && Version[0] >= '0' && Version[0] <= '9' {
+		return "v" + Version
+	}
+	return Version
+}
+
+// ReleaseURL is the page of the running release, or "" for a build that is
+// not one.
+func ReleaseURL() string {
+	m := releaseVersion.FindStringSubmatch(Version)
+	if m == nil {
+		return ""
+	}
+	return SourceURL + "/releases/tag/v" + m[1]
+}
 
 var (
 	configFile   string
