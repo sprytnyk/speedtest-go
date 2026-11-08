@@ -159,9 +159,10 @@ this.addEventListener("message", function (e) {
     doPing();
   }
   if (params[0] === "phase" && testState === 1) {
-    // later pings are recorded under this phase
+    // the worker records later pings under this phase. A third value sets the ping timeout in ms, and 0 waits as long as the ping takes
     phase = parseInt(params[1]) || 0;
     while (phases.length <= phase) phases.push(newStats());
+    if (params.length > 2) settings.ping_timeout = Math.max(0, parseInt(params[2]) || 0);
   }
   if (params[0] === "finish") {
     // the page ends a test that has no fixed duration; the ping on its way still measures the load, so it can get a moment
@@ -300,9 +301,12 @@ function doPing() {
 // ping an external host using fetch with no-cors (opaque response, but timing still works)
 function doPingExternal() {
   const prevT = new Date().getTime();
-  const remainingMs =
-    settings.duration > 0 ? Math.max(1, settings.duration * 1000 - (prevT - startTime)) : settings.ping_timeout;
-  const timeoutMs = Math.min(settings.ping_timeout, remainingMs);
+  // a ping timeout of 0 waits as long as the ping takes, up to the end of a test with a fixed duration
+  const remainingMs = settings.duration > 0 ? Math.max(1, settings.duration * 1000 - (prevT - startTime)) : 0;
+  const limits = [settings.ping_timeout, remainingMs].filter(function (ms) {
+    return ms > 0;
+  });
+  const timeoutMs = limits.length > 0 ? Math.min.apply(null, limits) : 0;
   // no cache-busting parameter: "no-store" already skips the browser cache, and a unique URL would push
   // every ping past the target's CDN edge to its origin, measuring their backend instead of the connection
   const url = settings.url_ping_external;
@@ -313,6 +317,7 @@ function doPingExternal() {
   if (controller) fetchOptions.signal = controller.signal;
 
   const timeout = new Promise(function (_, reject) {
+    if (timeoutMs === 0) return;
     timeoutId = setTimeout(function () {
       if (controller) controller.abort();
       reject(new Error("timeout"));

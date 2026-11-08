@@ -723,7 +723,7 @@
         color: var(--text-strong);
       }
 
-      .phase-table tbody tr + tr > * {
+      .phase-table tbody tr:not([hidden]) ~ tr > * {
         border-top: 1px solid var(--border);
       }
 
@@ -1132,8 +1132,10 @@
               <label for="loadSelect" data-i18n="stab.load">Load</label>
               <select id="loadSelect">
                 <button><selectedcontent></selectedcontent></button>
-                <option value="" data-i18n="stab.load.none">Idle</option>
-                <option value="updown" data-i18n="stab.load.updown">Download and upload</option>
+                <option value="idle" data-i18n="stab.load.none">Idle</option>
+                <option value="download" data-i18n="stab.load.download">Download</option>
+                <option value="upload" data-i18n="stab.load.upload">Upload</option>
+                <option value="all" data-i18n="stab.load.all">Idle, download and upload</option>
               </select>
             </div>
             <div class="field" id="targetArea">
@@ -1268,7 +1270,9 @@
           <div class="card-head">
             <div>
               <h2 class="card-title" data-i18n="stab.load.title">Latency under load</h2>
-              <p class="card-note" data-i18n="stab.load.note">The first third of the test runs idle, the second while downloading, the last while uploading.</p>
+              <p class="card-note" id="loadNote-all" data-i18n="stab.load.note">The first third of the test runs idle, the second while downloading, the last while uploading.</p>
+              <p class="card-note" id="loadNote-download" data-i18n="stab.load.note.download" hidden>The whole test runs while downloading.</p>
+              <p class="card-note" id="loadNote-upload" data-i18n="stab.load.note.upload" hidden>The whole test runs while uploading.</p>
             </div>
           </div>
           <table class="phase-table">
@@ -1363,8 +1367,12 @@
       var hoverX = null; // pointer position over the chart, in CSS pixels
       var dirty = true; // redraw on the next animation frame
 
-      // Load test: idle, then download, then upload, each a third of the duration
+      // Load test: a download or an upload alone takes the whole duration. The full test runs idle, then download,
+      // then upload, each for a third of it
       var PHASES = ["idle", "download", "upload"];
+      // the phases each choice of the Load select runs, in order
+      var LOAD_MODES = { idle: [0], download: [1], upload: [2], all: [0, 1, 2] };
+      var testPhases = [0]; // the phases of the running or last test
       var loadTest = false; // the running or last test has a load
       var loadWorker = null; // speedtest_worker.js running the download or upload
       var loadPhase = 0; // the phase the load worker runs, 0 while idle
@@ -1566,9 +1574,29 @@
         updateStartButtonState();
       }
 
+      // the phases the Load select asks for
+      function pickedPhases() {
+        return LOAD_MODES[I("loadSelect").value] || LOAD_MODES.idle;
+      }
+
+      // the Load select follows ?load= in the address, and the address follows the select
+      function loadModeFromUrl() {
+        var mode = new URLSearchParams(location.search).get("load");
+        I("loadSelect").value = LOAD_MODES[mode] ? mode : "idle";
+      }
+
+      function loadModeToUrl() {
+        var params = new URLSearchParams(location.search);
+        var mode = I("loadSelect").value;
+        if (mode === "idle") params.delete("load");
+        else params.set("load", mode);
+        var query = params.toString();
+        history.replaceState(null, "", location.pathname + (query ? "?" + query : "") + location.hash);
+      }
+
       function canStartTest() {
         // the load always goes to the speed test server, whatever is pinged
-        if (I("loadSelect").value) return localServerReady;
+        if (I("loadSelect").value !== "idle") return localServerReady;
         return !!I("targetSelect").value || localServerReady;
       }
 
@@ -1601,7 +1629,8 @@
         allPingData = [];
         latestData = null;
         loadSpeeds = [];
-        loadTest = !!I("loadSelect").value;
+        testPhases = pickedPhases();
+        loadTest = I("loadSelect").value !== "idle";
         resetUI();
 
         running = true;
@@ -1617,14 +1646,20 @@
 
         var duration = parseInt(I("durationSelect").value);
         testSeconds = duration;
-        phaseSeconds = duration / 3;
+        phaseSeconds = duration / testPhases.length;
         var externalTarget = I("targetSelect").value;
         var workerSettings = {
-          // with a load, the page ends the test once the upload is done
+          // with a load, the page ends the test once the last transfer is done
           duration: loadTest ? 0 : duration,
           ping_allowPerformanceApi: true,
           url_ping_external: externalTarget
         };
+        if (loadTest) {
+          // as on the main page, the last ping gets 2 s after the transfer ends to come back
+          workerSettings.finish_grace = 2000;
+          // and a test that starts with a transfer waits for each ping as long as it takes
+          if (testPhases[0] > 0) workerSettings.ping_timeout = 0;
+        }
 
         if (!externalTarget && selectedServer) {
           workerSettings.url_ping = joinServerUrl(selectedServer.server, selectedServer.pingURL);
@@ -1665,9 +1700,10 @@
           }
         }, 200);
         worker.postMessage("start " + JSON.stringify(workerSettings));
-        if (loadTest) {
+        if (testPhases[0] > 0) startLoadPhase(testPhases[0]);
+        else if (loadTest) {
           phaseTimer = setTimeout(function () {
-            startLoadPhase(1);
+            startLoadPhase(testPhases[1]);
           }, phaseSeconds * 1000);
         }
       }
@@ -1678,7 +1714,9 @@
         if (!running) return;
         loadPhase = n;
         loadStartedAt = new Date().getTime();
-        worker.postMessage("phase " + n);
+        // a busy line can hold a ping for seconds. That is latency under load, not a failed request, so during a
+        // transfer each ping waits as long as it takes, as on the main page
+        worker.postMessage("phase " + n + " 0");
 
         var loadSettings = {
           test_order: n === 1 ? "D" : "U",
@@ -1710,12 +1748,12 @@
         dirty = true;
       }
 
-      // move on to the upload after the download, and end the test after the upload
+      // move on to the next transfer, and end the test after the last one
       function endLoadPhase() {
-        var ended = loadPhase;
+        var next = testPhases[testPhases.indexOf(loadPhase) + 1];
         stopLoadWorker();
         if (!running) return;
-        if (ended === 1) startLoadPhase(2);
+        if (next) startLoadPhase(next);
         else if (worker) worker.postMessage("finish");
       }
 
@@ -1788,12 +1826,19 @@
         updatePhaseTable(null);
       }
 
-      // the phase table shows while a load is picked or a load test has results; the chart key only with results
+      // the phase table shows while a load is picked or while a load test has results. It has a row for each phase
+      // of that test. The chart key shows the phases only once there are results
       function updateLoadCard() {
-        I("loadCard").hidden = !I("loadSelect").value && !loadTest;
+        var shown = loadTest ? testPhases : pickedPhases();
+        I("loadCard").hidden = I("loadSelect").value === "idle" && !loadTest;
+        I("loadNote-all").hidden = shown.length === 1;
+        I("loadNote-download").hidden = shown.length > 1 || shown[0] !== 1;
+        I("loadNote-upload").hidden = shown.length > 1 || shown[0] !== 2;
+        var rows = I("phaseRows").rows;
+        for (var n = 0; n < rows.length; n++) rows[n].hidden = shown.indexOf(n) < 0;
         I("latencyKey").hidden = loadTest;
         var keys = document.querySelectorAll(".load-key");
-        for (var i = 0; i < keys.length; i++) keys[i].hidden = !loadTest;
+        for (var i = 0; i < keys.length; i++) keys[i].hidden = !loadTest || testPhases.indexOf(i) < 0;
       }
 
       // Format helpers
@@ -1927,7 +1972,7 @@
         setStat("statSamples", d.totalSamples > 0 ? String(d.totalSamples) : "--");
         if (loadTest) {
           // the worker has no fixed end with a load, so follow the clock until it finishes
-          setProgress(d.testState === 4 ? 1 : d.elapsed / (phaseSeconds * 3), d.elapsed, phaseSeconds * 3);
+          setProgress(d.testState === 4 ? 1 : d.elapsed / testSeconds, d.elapsed, testSeconds);
           I("progressBar").className = "progress-bar " + PHASES[d.phase];
         } else {
           setProgress(d.progress, d.elapsed, d.duration);
@@ -2025,7 +2070,7 @@
         ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
         ctx.lineWidth = 1;
 
-        // shade each phase of a load test, with a line where download and upload start and the phase name at the top
+        // shade each phase of a load test, with a line where each phase after the first starts and the phase name at the top
         var runStart = 0;
         var labelSpots = []; // per phase: where its name starts and how much room it has
         for (var i = 1; i <= data.length; i++) {
@@ -2040,7 +2085,7 @@
               var bandStyle = SERIES_COLORS[PHASES[data[runStart].phase]];
               ctx.fillStyle = bandStyle.band;
               ctx.fillRect(bx0, padT, bx1 - bx0, plotH);
-              if (data[runStart].phase > 0 && bandX >= padL) {
+              if (runStart > 0 && bandX >= padL) {
                 ctx.strokeStyle = CHART_COLORS.grid;
                 ctx.beginPath();
                 ctx.moveTo(Math.round(bandX) + 0.5, padT);
@@ -2307,6 +2352,7 @@
       I("downloadCsvBtn").addEventListener("click", downloadCsv);
       I("targetSelect").addEventListener("change", updateStartButtonState);
       I("loadSelect").addEventListener("change", function () {
+        loadModeToUrl();
         updateStartButtonState();
         updateLoadCard();
       });
@@ -2363,6 +2409,7 @@
       document.addEventListener("DOMContentLoaded", refreshSelects);
 
       // Init — load server list first (async), then initialize UI
+      loadModeFromUrl();
       resetUI();
       frame();
       loadServers(function () {
