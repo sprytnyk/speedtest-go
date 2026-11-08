@@ -14,8 +14,9 @@ let progress = 0;
 let overall = newStats();
 let phase = 0;
 let phases = [newStats()];
+let warmup = false; // the page's download or upload is warming up: pings are kept for the chart but left out of the numbers
 
-let pingData = []; // all ping data points {t: elapsedMs, ping: ms, lost: bool, phase: n}
+let pingData = []; // all ping data points {t: elapsedMs, ping: ms, lost: bool, phase: n, warmup: bool}
 let lastReportedIndex = 0; // for delta delivery
 
 let settings = {
@@ -164,6 +165,14 @@ this.addEventListener("message", function (e) {
     while (phases.length <= phase) phases.push(newStats());
     if (params.length > 2) settings.ping_timeout = Math.max(0, parseInt(params[2]) || 0);
   }
+  if (params[0] === "warmup" && testState === 1) {
+    // "warmup 1" while the transfer ramps up, "warmup 0" once it counts; the change across the warm-up is no jitter
+    warmup = params[1] === "1";
+    if (warmup) {
+      overall.prev = 0;
+      phases[phase].prev = 0;
+    }
+  }
   if (params[0] === "finish") {
     // the page ends a test that has no fixed duration; the ping on its way still measures the load, so it can get a moment
     if (testState >= 4 || finishing) return;
@@ -195,28 +204,35 @@ function finish() {
   }
 }
 
-function recordPing(instspd) {
+// a ping sent or answered during a warm-up is part of it: one sent while the transfer ramps up can come back after
+function recordPing(instspd, sentInWarmup) {
+  const inWarmup = warmup || sentInWarmup;
   // guard against 0ms pings
   if (instspd < 1) instspd = prevInstspd;
   if (instspd < 1) instspd = 1;
   prevInstspd = instspd;
 
   currentPing = instspd;
-  addPing(overall, instspd);
-  addPing(phases[phase], instspd);
+  if (!inWarmup) {
+    addPing(overall, instspd);
+    addPing(phases[phase], instspd);
+  }
 
   // record data point
   const now = new Date().getTime();
   elapsed = (now - startTime) / 1000;
-  pingData.push({ t: elapsed, ping: parseFloat(instspd.toFixed(2)), lost: false, phase: phase });
+  pingData.push({ t: elapsed, ping: parseFloat(instspd.toFixed(2)), lost: false, phase: phase, warmup: inWarmup });
 }
 
-function recordLoss() {
+function recordLoss(sentInWarmup) {
+  const inWarmup = warmup || sentInWarmup;
   const now = new Date().getTime();
-  addLoss(overall);
-  addLoss(phases[phase]);
+  if (!inWarmup) {
+    addLoss(overall);
+    addLoss(phases[phase]);
+  }
   elapsed = (now - startTime) / 1000;
-  pingData.push({ t: elapsed, ping: 0, lost: true, phase: phase });
+  pingData.push({ t: elapsed, ping: 0, lost: true, phase: phase, warmup: inWarmup });
 }
 
 // pace pings to avoid excessive sample rates on low-latency links
@@ -251,6 +267,7 @@ function doPing() {
   }
 
   const prevT = new Date().getTime();
+  const sentInWarmup = warmup;
   xhr = new XMLHttpRequest();
   xhr.onload = function () {
     pinging = false;
@@ -274,14 +291,14 @@ function doPing() {
       }
     }
 
-    recordPing(instspd);
+    recordPing(instspd, sentInWarmup);
     if (finishing) finish();
     else schedulePing(instspd);
   };
   xhr.onerror = function () {
     pinging = false;
     if (aborted || testState >= 4) return;
-    recordLoss();
+    recordLoss(sentInWarmup);
     if (finishing) finish();
     else schedulePing(0);
   };
@@ -301,6 +318,7 @@ function doPing() {
 // ping an external host using fetch with no-cors (opaque response, but timing still works)
 function doPingExternal() {
   const prevT = new Date().getTime();
+  const sentInWarmup = warmup;
   // a ping timeout of 0 waits as long as the ping takes, up to the end of a test with a fixed duration
   const remainingMs = settings.duration > 0 ? Math.max(1, settings.duration * 1000 - (prevT - startTime)) : 0;
   const limits = [settings.ping_timeout, remainingMs].filter(function (ms) {
@@ -329,13 +347,13 @@ function doPingExternal() {
       if (timeoutId) clearTimeout(timeoutId);
       if (aborted || testState >= 4) return;
       const instspd = new Date().getTime() - prevT;
-      recordPing(instspd);
+      recordPing(instspd, sentInWarmup);
       schedulePing(instspd);
     })
     .catch(function () {
       if (timeoutId) clearTimeout(timeoutId);
       if (aborted || testState >= 4) return;
-      recordLoss();
+      recordLoss(sentInWarmup);
       schedulePing(0);
     });
 }

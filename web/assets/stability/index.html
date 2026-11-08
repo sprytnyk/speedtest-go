@@ -797,6 +797,13 @@
         border-top: 2px dashed var(--text-muted);
       }
 
+      .swatch.hatch {
+        width: 1rem;
+        height: 0.75rem;
+        border-radius: 2px;
+        background: repeating-linear-gradient(135deg, rgba(148, 163, 184, 0.5) 0 1.5px, transparent 1.5px 4px);
+      }
+
       .swatch.line.idle {
         background-color: var(--idle);
       }
@@ -1271,9 +1278,9 @@
           <div class="card-head">
             <div>
               <h2 class="card-title" data-i18n="stab.load.title">Latency under load</h2>
-              <p class="card-note" id="loadNote-all" data-i18n="stab.load.note">The first third of the test runs idle, the second while downloading, the last while uploading.</p>
-              <p class="card-note" id="loadNote-download" data-i18n="stab.load.note.download" hidden>The whole test runs while downloading.</p>
-              <p class="card-note" id="loadNote-upload" data-i18n="stab.load.note.upload" hidden>The whole test runs while uploading.</p>
+              <p class="card-note" id="loadNote-all" data-i18n="stab.load.note">The first third of the test runs idle, the second while downloading, the last while uploading. Pings while a transfer warms up are left out.</p>
+              <p class="card-note" id="loadNote-download" data-i18n="stab.load.note.download" hidden>The whole test runs while downloading. Pings while it warms up are left out.</p>
+              <p class="card-note" id="loadNote-upload" data-i18n="stab.load.note.upload" hidden>The whole test runs while uploading. Pings while it warms up are left out.</p>
             </div>
           </div>
           <table class="phase-table">
@@ -1320,6 +1327,7 @@
                 <li class="load-key" hidden><span class="swatch line idle"></span><span data-i18n="stab.phase.idle">Idle</span></li>
                 <li class="load-key" hidden><span class="swatch line download"></span><span data-i18n="stab.phase.download">Download</span></li>
                 <li class="load-key" hidden><span class="swatch line upload"></span><span data-i18n="stab.phase.upload">Upload</span></li>
+                <li id="warmupKey" title="The transfer ramps up here. These pings are on the chart but not in the numbers." data-i18n-attr="title:stab.key.warmupTitle" hidden><span class="swatch hatch"></span><span data-i18n="stab.key.warmup">Warm-up</span></li>
                 <li><span class="swatch dot"></span><span data-i18n="stab.key.failed">Failed request</span></li>
                 <li id="thresholdKey" hidden><span class="swatch dash"></span><span data-i18n="stab.threshold">Alert threshold</span></li>
               </ul>
@@ -1376,11 +1384,12 @@
       var testPhases = [0]; // the phases of the running or last test
       var loadTest = false; // the running or last test has a load
       var loadWorker = null; // speedtest_worker.js running the download or upload
-      var loadPhase = 0; // the phase the load worker runs, 0 while idle
-      var loadStartedAt = 0;
       var phaseSeconds = 0;
       var testSeconds = 0; // length of the running or last test, which the chart shows in full
       var phaseTimer = null;
+      var testStartedAt = 0; // when the running test started, for the phases' clock
+      var phaseIndex = 0; // the running phase, as an index into testPhases
+      var loadWarming = false; // the running transfer is warming up
       var loadSpeeds = []; // Mbps per phase, as reported by the load worker
 
       // Chart colors, validated against the card surface for lightness, contrast and color-blind separation
@@ -1694,39 +1703,52 @@
         };
         updater = setInterval(function () {
           if (worker) worker.postMessage("status");
-          if (loadWorker) {
-            loadWorker.postMessage("status");
-            // don't let a stuck download or upload hold up the test
-            if (new Date().getTime() - loadStartedAt > (phaseSeconds + 15) * 1000) endLoadPhase();
-          }
+          if (loadWorker) loadWorker.postMessage("status");
         }, 200);
         worker.postMessage("start " + JSON.stringify(workerSettings));
-        if (testPhases[0] > 0) startLoadPhase(testPhases[0]);
-        else if (loadTest) {
+        testStartedAt = new Date().getTime();
+        startPhase(0);
+      }
+
+      // each phase starts on the clock, its share of the chosen time after the start, and the last one ends at the
+      // chosen time. A transfer can't run the test long that way, and the page needs no warm-up lengths: the speed
+      // worker warms up for as long as its own settings say, and reports when it is done
+      function startPhase(i) {
+        if (phaseTimer) {
+          clearTimeout(phaseTimer);
+          phaseTimer = null;
+        }
+        if (!running) return;
+        stopLoadWorker();
+        if (i >= testPhases.length) {
+          if (worker) worker.postMessage("finish");
+          return;
+        }
+        phaseIndex = i;
+        if (testPhases[i] > 0) startLoadPhase(testPhases[i]);
+        if (loadTest) {
+          var next = testStartedAt + (i + 1) * phaseSeconds * 1000;
           phaseTimer = setTimeout(function () {
-            startLoadPhase(testPhases[1]);
-          }, phaseSeconds * 1000);
+            startPhase(i + 1);
+          }, Math.max(0, next - new Date().getTime()));
         }
       }
 
       // run the download (1) or upload (2) phase with the speed test worker while the pings go on
       function startLoadPhase(n) {
-        phaseTimer = null;
-        if (!running) return;
-        loadPhase = n;
-        loadStartedAt = new Date().getTime();
         // a busy line can hold a ping for seconds. That is latency under load, not a failed request, so during a
         // transfer each ping waits as long as it takes, as on the main page
         worker.postMessage("phase " + n + " 0");
+        // the pings while the transfer warms up go on the chart but not into the numbers, as its speed leaves them out
+        worker.postMessage("warmup 1");
+        loadWarming = true;
 
         var loadSettings = {
           test_order: n === 1 ? "D" : "U",
           time_auto: false,
-          // the grace time comes before the measured time, so take it off to keep the phase its length
-          time_dlGraceTime: 1.5,
-          time_ulGraceTime: 3,
-          time_dl_max: phaseSeconds - 1.5,
-          time_ul_max: phaseSeconds - 3,
+          // the clock ends the phase, so this only has to outlast it; the warm-up comes on top of it
+          time_dl_max: phaseSeconds,
+          time_ul_max: phaseSeconds,
           // browsers open at most 6 connections to a server, so leave some free for the pings
           xhr_dlMultistream: 4
         };
@@ -1742,30 +1764,29 @@
           if (loadWorker !== currentLoadWorker) return;
           var data = JSON.parse(e.data);
           loadSpeeds[n] = n === 1 ? data.dlStatus : data.ulStatus;
-          if (data.testState >= 4) endLoadPhase();
+          var transferring = data.testState === 1 || data.testState === 3;
+          if (loadWarming && ((transferring && !data.warmingUp) || data.testState >= 4)) endWarmup();
+          // a transfer that ends early, such as a failed one, moves the test on to the next phase
+          if (data.testState >= 4) startPhase(phaseIndex + 1);
           dirty = true;
         };
         loadWorker.postMessage("start " + JSON.stringify(loadSettings));
         dirty = true;
       }
 
-      // move on to the next transfer, and end the test after the last one
-      function endLoadPhase() {
-        var next = testPhases[testPhases.indexOf(loadPhase) + 1];
-        stopLoadWorker();
-        if (!running) return;
-        if (next) startLoadPhase(next);
-        else if (worker) worker.postMessage("finish");
+      function endWarmup() {
+        loadWarming = false;
+        if (worker) worker.postMessage("warmup 0");
       }
 
       function stopLoadWorker() {
+        if (loadWarming) endWarmup();
         if (loadWorker) {
           try {
             loadWorker.terminate();
           } catch (e) {}
           loadWorker = null;
         }
-        loadPhase = 0;
       }
 
       function stopTest() {
@@ -1838,6 +1859,7 @@
         var rows = I("phaseRows").rows;
         for (var n = 0; n < rows.length; n++) rows[n].hidden = shown.indexOf(n) < 0;
         I("latencyKey").hidden = loadTest;
+        I("warmupKey").hidden = !loadTest;
         var keys = document.querySelectorAll(".load-key");
         for (var i = 0; i < keys.length; i++) keys[i].hidden = !loadTest || testPhases.indexOf(i) < 0;
       }
@@ -1973,7 +1995,9 @@
         setStat("statSamples", d.totalSamples > 0 ? String(d.totalSamples) : "--");
         if (loadTest) {
           // the worker has no fixed end with a load, so follow the clock until it finishes
-          setProgress(d.testState === 4 ? 1 : d.elapsed / testSeconds, d.elapsed, testSeconds);
+          // the last ping can land a moment before the end, so a finished test shows its whole length
+          var done = d.testState === 4;
+          setProgress(done ? 1 : d.elapsed / testSeconds, done ? testSeconds : d.elapsed, testSeconds);
           I("progressBar").className = "progress-bar " + PHASES[d.phase];
         } else {
           setProgress(d.progress, d.elapsed, d.duration);
@@ -2026,6 +2050,27 @@
       }
 
       // Canvas chart rendering, drawn in CSS pixels
+      // diagonal lines that mark a transfer's warm-up on the chart
+      var warmupTile = null;
+      function warmupPattern(ctx) {
+        if (!warmupTile) {
+          warmupTile = document.createElement("canvas");
+          warmupTile.width = warmupTile.height = 8;
+          var g = warmupTile.getContext("2d");
+          g.strokeStyle = "rgba(148, 163, 184, 0.22)";
+          g.lineWidth = 1.5;
+          g.beginPath();
+          g.moveTo(-2, 2);
+          g.lineTo(2, -2);
+          g.moveTo(0, 8);
+          g.lineTo(8, 0);
+          g.moveTo(6, 10);
+          g.lineTo(10, 6);
+          g.stroke();
+        }
+        return ctx.createPattern(warmupTile, "repeat");
+      }
+
       function drawChart() {
         var canvas = I("pingChart");
         var ctx = canvas.getContext("2d");
@@ -2104,6 +2149,20 @@
           phaseLabel.style.left = (spot ? Math.round(spot.x) : 0) + "px";
           phaseLabel.style.top = padT + 4 + "px";
           phaseLabel.style.visibility = spot && phaseLabel.offsetWidth + 12 <= spot.room ? "visible" : "hidden";
+        }
+
+        // hatch each transfer's warm-up: its pings are on the chart but not in the numbers
+        for (var i = 0; i < data.length; i++) {
+          if (!data[i].warmup) continue;
+          var j = i;
+          while (j + 1 < data.length && data[j + 1].warmup) j++;
+          var wx0 = Math.max(padL, xFor(data[i].t));
+          var wx1 = Math.min(padL + plotW, xFor(j + 1 < data.length ? data[j + 1].t : maxTime));
+          if (wx1 > wx0) {
+            ctx.fillStyle = warmupPattern(ctx);
+            ctx.fillRect(wx0, padT, wx1 - wx0, plotH);
+          }
+          i = j;
         }
 
         // horizontal grid lines with value labels
@@ -2261,7 +2320,10 @@
         ctx.stroke();
         drawMarker(ctx, nx, ny, nearest.lost ? CHART_COLORS.failed : seriesStyle(nearest).line);
 
-        I("tooltipTime").textContent = fmtTime(nearest.t) + (loadTest ? " · " + I18N.t("stab.phase." + PHASES[nearest.phase]) : "");
+        I("tooltipTime").textContent =
+          fmtTime(nearest.t) +
+          (loadTest ? " · " + I18N.t("stab.phase." + PHASES[nearest.phase]) : "") +
+          (nearest.warmup ? " · " + I18N.t("stab.key.warmup") : "");
         I("tooltipValue").textContent = nearest.lost ? I18N.t("stab.tooltipFailed") : fmt(nearest.ping) + " " + I18N.t("unit.ms");
         tooltip.hidden = false;
         var half = tooltip.offsetWidth / 2;
@@ -2331,10 +2393,10 @@
       // CSV download
       function downloadCsv() {
         if (allPingData.length === 0) return;
-        var csv = "elapsed_s,ping_ms,failed,phase\n";
+        var csv = "elapsed_s,ping_ms,failed,phase,warmup\n";
         for (var i = 0; i < allPingData.length; i++) {
           var d = allPingData[i];
-          csv += d.t.toFixed(3) + "," + d.ping.toFixed(2) + "," + (d.lost ? "1" : "0") + "," + PHASES[d.phase] + "\n";
+          csv += d.t.toFixed(3) + "," + d.ping.toFixed(2) + "," + (d.lost ? "1" : "0") + "," + PHASES[d.phase] + "," + (d.warmup ? "1" : "0") + "\n";
         }
         var blob = new Blob([csv], { type: "text/csv" });
         var url = URL.createObjectURL(blob);
