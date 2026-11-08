@@ -1,0 +1,169 @@
+# How the stability test works
+
+The stability test at `/stability/` pings the server for the chosen time and charts every ping. With a load picked, it
+also downloads or uploads during part of the test, and shows the latency of each phase. This page shows how the parts
+work together, with the 60 s test as the example.
+
+## 1. The parts
+
+```mermaid
+flowchart TB
+  Page["<b>Page</b><br/>Phase timer starts each phase on the clock<br/>Status timer asks both workers what is new every 200 ms<br/>Chart redraws when new pings arrive"]
+  Ping["<b>Ping worker</b><br/>Runs for the whole test<br/>Keeps the numbers and leaves warm-up pings out"]
+  Speed["<b>Speed worker</b><br/>A new one for each download or upload phase<br/>Says when its warm-up is over"]
+  Srv[("Test server")]
+
+  Page -->|"start, stop, which phase, warm-up on or off"| Ping
+  Ping -->|"new pings and numbers"| Page
+  Page -->|"start a download or an upload"| Speed
+  Speed -->|"speed, and whether it is still warming up"| Page
+  Ping <-->|"one ping at a time, at most 5 a second"| Srv
+  Speed <-->|"4 download streams, or 3 upload streams"| Srv
+```
+
+The page is `web/assets/stability/index.html`. The ping worker is `stability_worker.js`, and the speed worker is
+`speedtest_worker.js`, the one the speed test page uses.
+
+The page sends the workers short text messages:
+
+| Message | Sent to | What it means |
+|---|---|---|
+| `start {settings}` | both workers | Start, with these settings. |
+| `status` | both workers | Send what is new since the last time. |
+| `phase 1 0` | ping worker | The download starts. Pings from now on go into the download row, and each waits as long as it takes. The 1 is the phase, the 0 is the ping timeout, and a timeout of 0 means none. |
+| `phase 2 0` | ping worker | The upload starts. The same, for the upload row. |
+| `warmup 1` | ping worker | The transfer is warming up. |
+| `warmup 0` | ping worker | The warm-up is over. |
+| `finish` | ping worker | The last phase is over. |
+| `abort` | ping worker | The user pressed Stop. |
+
+The ping worker starts in the idle phase, so the page never sends `phase 0`.
+
+## 2. A 60 s test of idle, download and upload
+
+With Load set to "Idle, download and upload", each phase gets a third of the time and starts on the clock. The warm-up
+takes part of its phase, so the test still ends at 60 s.
+
+```mermaid
+gantt
+  title Idle, download and upload, 60 s
+  dateFormat mm:ss
+  axisFormat %M:%S
+  section Phases
+  Idle                         :p0, 00:00, 20s
+  Download                     :p1, 00:20, 20s
+  Upload                       :p2, 00:40, 20s
+  section Warm-up, chart only
+  Download warm-up, about 1.6 s :crit, w1, 00:20, 1600ms
+  Upload warm-up, about 3.3 s   :crit, w2, 00:40, 3300ms
+  section Ping worker
+  Pings, 5 s timeout           :q0, 00:00, 20s
+  Pings, no timeout            :q1, 00:20, 40s
+  Last ping can come back      :q2, 01:00, 2s
+```
+
+With Load set to Download or Upload, the test is one phase of the full 60 s, with its warm-up at the start. With Load
+set to Idle, the page starts no phase timer and no speed worker, and the ping worker stops by itself at 60 s.
+
+## 3. The download phase
+
+This is the middle phase of the 60 s test above.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant P as Page
+  participant W as Ping worker
+  participant S as Speed worker
+
+  Note over P: 20 s. The phase timer fires,<br/>and the idle phase is over.
+  P->>W: Now download. Wait for each ping as long as it takes.
+  Note over W: New pings go into the download row of the table.<br/>A busy line can hold a ping for seconds. That is<br/>latency under load, so it does not count as lost.
+  P->>W: Warm-up on
+  Note over W: Pings still go on the chart, hatched,<br/>but stay out of the numbers.<br/>Forgets the last ping, so the step up from idle<br/>latency to latency under load is not jitter.
+  P->>S: Start a download with 4 streams
+  Note over P: Sets the phase timer for 40 s
+  Note over S: The 1.5 s grace time starts. The download<br/>speeds up, and its speed does not count yet.
+
+  loop every 200 ms, while the warm-up lasts
+    P->>S: What is new?
+    S-->>P: Speed so far, still warming up
+    P->>W: What is new?
+    W-->>P: New pings, marked as warm-up
+  end
+
+  Note over S: The grace time is over.<br/>The speed counts from here.
+  S-->>P: Speed, warm-up over
+  Note over P: Learns this on the next 200 ms check,<br/>so the warm-up lasts about 1.6 to 1.8 s
+  P->>W: Warm-up off
+  Note over W: From the next ping on, pings count<br/>in the overall numbers and the download row
+
+  loop every 200 ms, until 40 s
+    P->>S: What is new?
+    S-->>P: Speed
+    P->>W: What is new?
+    W-->>P: New pings and the numbers
+    Note over P: Updates the speed, the table,<br/>the cards and the chart
+  end
+
+  Note over P: 40 s. The phase timer fires.
+  P->>S: Stop
+  Note over S: The page closes this speed worker.<br/>The upload phase starts a new one.
+```
+
+The page never sets the warm-up length. It waits for the speed worker to say the warm-up is over, so the warm-up follows
+`time_dlGraceTime` and `time_ulGraceTime`, the same grace times the speed test uses.
+
+The upload phase, from 40 to 60 s, takes the same steps with two differences. Its grace time is 3 s, so its warm-up
+lasts about 3.3 s. And it is the last phase, so at 60 s the test ends.
+
+The ping worker sends one ping at a time and waits for its answer before it sends the next. So at 60 s a ping is
+usually still on its way:
+
+| Time | What happens |
+|---|---|
+| 59.8 s | The ping worker sends a ping while the upload runs. |
+| 60.0 s | The phase timer fires. The page stops the upload and tells the ping worker to finish. |
+| 60.7 s | The ping comes back, 900 ms. |
+
+Pings stuck behind the upload are often the slowest ones, and this test is there to catch them. So the worker waits up
+to 2 s for that ping. If it comes back in time, it counts in the upload row, because the worker sent it during the
+upload. If it doesn't, the worker drops it, and it doesn't count as lost. Then the test stops. The speed test page gives
+its last ping 2 s too.
+
+If a transfer stops before its phase is over, for example because it fails, the speed worker says it is finished. The
+page then starts the next phase at once instead of waiting for the timer.
+
+## 4. What happens to each ping
+
+```mermaid
+flowchart TD
+  Send["Send a ping and note whether the warm-up is on"] --> Back{"Did it come back?"}
+  Back -->|"yes"| Time["Time it"]
+  Back -->|"no, an error or a timeout"| Lost["Mark it lost"]
+  Time --> Warm{"Was the warm-up on when it was sent, or is it on now?"}
+  Lost --> Warm
+  Warm -->|"yes"| Chart["Chart only. Hatched on the chart, and warmup = 1 in the CSV."]
+  Warm -->|"no"| Count["Counts in the overall numbers and in this phase's numbers"]
+  Chart --> Wait["Wait so pings are at least 200 ms apart"]
+  Count --> Wait
+  Wait --> Send
+```
+
+A ping counts only if the warm-up was off both when the worker sent it and when it came back. Here the download's
+warm-up ends at about 21.6 s:
+
+| Ping | Sent | Answered | Warm-up on when sent | Warm-up on when answered | Counted |
+|---|---|---|---|---|---|
+| A | 21.3 s | 21.5 s | yes | yes | no |
+| B | 21.5 s | 21.9 s | yes | no | no |
+| C | 21.9 s | 21.95 s | no | no | yes |
+
+Ping B spent most of its 400 ms stuck behind the warm-up. If the worker only checked the warm-up when the answer came
+back, B would count, and a warm-up spike would go into the download numbers. The same check works when a warm-up starts.
+A ping sent at 19.9 s, before the warm-up, and answered at 20.2 s, during it, stays out too.
+
+Jitter is the average change from one counted ping to the next. Say the last idle ping is 20 ms and the first ping after
+the download's warm-up is 60 ms. That 40 ms change is the step up to latency under load, and the phase table already
+shows it as the difference between the idle and download rows. It isn't jitter. So when a warm-up starts, the worker
+forgets the last ping, and the first ping after the warm-up has nothing to compare with.
