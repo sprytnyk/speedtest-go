@@ -28,13 +28,13 @@ This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedt
 ## Features
 
 * Download and upload speed, ping and jitter, with a live speed chart
-* Latency and jitter while downloading and uploading
+* Latency and jitter while downloading and uploading, after each transfer's warm-up
 * Jitter as the average change between consecutive pings, shown with the smallest and largest change
 * IP address, ISP and country of the client
 * Connection stability test at `/stability/`, with latency over time, jitter, the p50 and p95 of both, failed
   requests, an alert threshold and CSV export. It runs idle, while downloading, while uploading, or all three in turn,
-  and shows the latency of each phase. Add `?load=download`, `?load=upload` or `?load=all` to the address to open it
-  with that load picked
+  and shows the latency of each phase, leaving out the pings while a transfer warms up. Add `?load=download`,
+  `?load=upload` or `?load=all` to the address to open it with that load picked
 * Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
 * Multiple test servers to choose from
 * English and Ukrainian, picked from the browser's language or a switch on every page
