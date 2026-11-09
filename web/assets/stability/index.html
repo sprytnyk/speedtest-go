@@ -1919,6 +1919,31 @@
         return (v < 0 ? "−" : "+") + I18N.num(a, a < 10 ? 1 : 0);
       }
 
+      // How much the load adds to the idle latency. A few slow pings pull the average up but don't move the middle
+      // ping, so the middle ping (p50) shows the typical change. The p95 shows how much slower the slowest pings get.
+      // The worker gives both only from 20 pings in a phase, which a slow link may never reach, so until then this
+      // compares the averages
+      function loadSummary(ph) {
+        var withPct = function (p) {
+          return p.p50 >= 0 && p.p95 >= 0;
+        };
+        var upload = received(ph[2]);
+        var pct = withPct(ph[0]) && withPct(ph[1]);
+        // while the test runs, leave the upload out until it has 20 pings, or the download's numbers would switch back
+        // to averages for the upload's first seconds
+        if (upload && pct && !withPct(ph[2]) && running) upload = false;
+        if (upload) pct = pct && withPct(ph[2]);
+        var key = upload ? "stab.loadSummary" : "stab.loadSummary.download";
+        var mid = pct ? "p50" : "avg";
+        var deltas = { dl: fmtDelta(ph[1][mid] - ph[0][mid]) };
+        if (upload) deltas.ul = fmtDelta(ph[2][mid] - ph[0][mid]);
+        var text = I18N.t(key, deltas);
+        if (!pct) return text;
+        var slow = { dl95: fmtDelta(ph[1].p95 - ph[0].p95) };
+        if (upload) slow.ul95 = fmtDelta(ph[2].p95 - ph[0].p95);
+        return text + " " + I18N.t(key + ".p95", slow);
+      }
+
       // verdict box style for each rating; the title always names the rating, so it never relies on color alone
       var VERDICT_STYLES = { great: "ok", good: "ok", poor: "warn", bad: "bad" };
 
@@ -1955,10 +1980,7 @@
         } else {
           title = I18N.t("stab.rating." + r.cls);
           if (loadTest && received(ph[0]) && received(ph[1])) {
-            // how much the load adds to the idle latency
-            var deltas = { dl: fmtDelta(ph[1].avg - ph[0].avg) };
-            if (received(ph[2])) deltas.ul = fmtDelta(ph[2].avg - ph[0].avg);
-            text = I18N.t(deltas.ul ? "stab.loadSummary" : "stab.loadSummary.download", deltas);
+            text = loadSummary(ph);
           } else {
             text = I18N.t("stab.summary", { avg: fmt(d.avgPing), jitter: fmt(d.jitter), loss: I18N.num(d.packetLoss, 1) });
           }
