@@ -33,8 +33,9 @@ This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedt
 * IP address, ISP and country of the client
 * Connection stability test at `/stability/`, with latency over time, jitter, the p50 and p95 of both, failed
   requests, an alert threshold and CSV export. It runs idle, while downloading, while uploading, or all three in turn,
-  and shows the latency of each phase, leaving out the pings while a transfer warms up. Add `?load=download`,
-  `?load=upload` or `?load=all` to the address to open it with that load picked.
+  and shows the latency of each phase, leaving out the pings while a transfer warms up. The result compares the middle
+  ping and the p95 under each load with idle. Add `?load=download`, `?load=upload` or `?load=all` to the address to
+  open it with that load picked.
   [How the stability test works](docs/stability.md) shows its timers, workers and warm-ups in diagrams
 * Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
 * Multiple test servers to choose from
