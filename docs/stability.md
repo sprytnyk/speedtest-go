@@ -174,3 +174,22 @@ Jitter is the average change from one counted ping to the next. Say the last idl
 the download's warm-up is 60 ms. That 40 ms change is the step up to latency under load, and the phase table already
 shows it as the difference between the idle and download rows. It isn't jitter. So when a warm-up starts, the worker
 forgets the last ping, and the first ping after the warm-up has nothing to compare with.
+
+## 5. The result message
+
+The box above the chart rates the test Great, Good, Poor or Bad by the average latency, the jitter and the failed
+requests. With a load, it rates each of the three by the worst phase.
+
+With a load, the line under the rating compares each phase with idle. The first sentence gives the change in the middle
+ping, the p50. The second gives the change in the p95, the time that 95% of the pings took or less. For example:
+
+> Compared to idle, latency changes by +1.4 ms while downloading and +1.2 ms while uploading. For the slowest 5% of
+> pings, it changes by +8 ms and +6 ms.
+
+A few slow pings pull the average up but don't move the middle ping, so the middle ping shows the typical change. The
+p95 shows how much slower the slowest pings get, and those are the pings that make calls stutter.
+
+The worker works out p50 and p95 only once a phase has 20 counted pings. A 60 s test has 80 to 100 in each phase, but a
+link that is very slow under load may never get there. Until every phase in the line has 20, the line compares the
+averages and leaves out the second sentence. While the test runs, the line leaves the upload out until it has 20 pings.
+Otherwise the download's numbers would switch back to averages for the upload's first seconds.
