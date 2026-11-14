@@ -1,6 +1,6 @@
 ---
 name: release
-description: Ship a new version of speedtest-go. Commits pending work, runs the checks, makes a signed tag on master and pushes it, so CI builds the archives and the Docker image. Builds the same archives on this machine with scripts/build-release.sh, checks they match CI's, signs SHA256SUMS, writes the release notes and publishes the GitHub release. Use when the user asks to release, ship, or "ship it as usual".
+description: Ship a new version of speedtest-go. Commits pending work, runs the checks, makes a signed release commit and tag on master and pushes them, so CI builds the archives and the Docker image. Builds the same archives on this machine with scripts/build-release.sh, checks they match CI's, signs SHA256SUMS, writes the release notes and publishes the GitHub release. Use when the user asks to release, ship, or "ship it as usual".
 argument-hint: '[version, e.g. 2.0.1; derived from commits if omitted]'
 disable-model-invocation: true
 ---
@@ -14,8 +14,8 @@ of the release notes.
 
 If a step fails, stop and tell the user. Don't work around it.
 
-There is no version file and no release commit. The version comes from the tag, which
-`scripts/build-release.sh` and the Docker workflow pass to `-X main.version=...`.
+There is no version file, so the release commit is empty. The version comes from the tag,
+which `scripts/build-release.sh` and the Docker workflow pass to `-X main.version=...`.
 
 `gh` is installed and logged in. Use it to watch the CI runs, download CI's archives and
 publish the release.
@@ -64,18 +64,21 @@ publish the release.
 - `git status --porcelain --untracked-files=no` must print nothing, or the build is marked
   `-dirty`.
 
-## 3. Signed tag
+## 3. Release commit and signed tag
 
-The tag goes on `master`'s HEAD. It is annotated and signed. Its message is the version, a
-blank line, and a short summary of the release in plain words, wrapped at 72 columns. See
-`git cat-file -p v3.1.0` for an example. Write the message to a file in the scratchpad:
+Make an empty signed commit on `master`'s HEAD and put the tag on it. The tag is annotated
+and signed. Its message is the version, a blank line, and a short summary of the release
+in plain words, wrapped at 72 columns. `git cat-file -p v3.1.0` shows an example. Write the
+message to a file in the scratchpad, then run:
 
 ```bash
+git commit --allow-empty -S -m "chore(release): X.Y.Z"
 git tag -s vX.Y.Z -F <scratchpad>/tag-message
-git tag -v vX.Y.Z
+git verify-commit HEAD && git tag -v vX.Y.Z
 ```
 
-The signature must be Good, from `0xC00C0F0D647BD3C6`. If gpg pinentry times out, ask the
+The commit message is just `chore(release): X.Y.Z`, with no body and no trailers. Both
+signatures must be Good, from `0xC00C0F0D647BD3C6`. If gpg pinentry times out, ask the
 user to run the command themselves with a `!` prefix.
 
 ## 4. Push
