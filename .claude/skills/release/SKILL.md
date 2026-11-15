@@ -167,7 +167,7 @@ One-line summary of the release.
 ### Breaking
 - What changed, why, and what users have to do about settings, links or the database.
 
-### Highlights
+### Features
 - New features, the ones users see first.
 
 ### Fixes
