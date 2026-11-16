@@ -1,0 +1,54 @@
+name: Vulnerability scan
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    # Catch new advisories even when no code or image has changed.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  grype:
+    name: Grype (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: current
+            image: speedtest-go:scan
+          # A fresh build can use a newer Go version than the published image.
+          - target: released
+            image: ghcr.io/${{ github.repository }}:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build app image
+        if: matrix.target == 'current'
+        run: docker build --pull --tag speedtest-go:scan .
+
+      # Report findings in the Security tab without failing the run.
+      - name: Scan image
+        id: scan
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ${{ matrix.image }}
+          fail-build: false
+          cache-db: true
+
+      - name: Upload image results
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
+          category: grype-${{ matrix.target }}-image
