@@ -2,7 +2,7 @@ module github.com/librespeed/speedtest-go
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/breml/rootcerts v0.2.1
