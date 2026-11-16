@@ -68,11 +68,9 @@ func (p *SQLite) Insert(data *schema.TelemetryData) error {
 func (p *SQLite) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	var record schema.TelemetryData
 	row := p.db.QueryRow(`SELECT * FROM speedtest_users WHERE uuid = ?`, uuid)
-	if row != nil {
-		var id int
-		if err := row.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
-			return nil, fmt.Errorf("sqlite fetch by uuid: %w", err)
-		}
+	var id int
+	if err := row.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
+		return nil, fmt.Errorf("sqlite fetch by uuid: %w", err)
 	}
 	return &record, nil
 }
@@ -83,16 +81,14 @@ func (p *SQLite) FetchLast100() ([]schema.TelemetryData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sqlite fetch last 100: %w", err)
 	}
-	if rows != nil {
-		defer rows.Close()
-		for rows.Next() {
-			var record schema.TelemetryData
-			var id int
-			if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
-				return nil, fmt.Errorf("sqlite scan row: %w", err)
-			}
-			records = append(records, record)
+	defer rows.Close()
+	for rows.Next() {
+		var record schema.TelemetryData
+		var id int
+		if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
+			return nil, fmt.Errorf("sqlite scan row: %w", err)
 		}
+		records = append(records, record)
 	}
 	return records, rows.Err()
 }

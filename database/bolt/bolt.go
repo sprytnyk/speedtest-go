@@ -63,18 +63,11 @@ func (p *Bolt) FetchLast100() ([]schema.TelemetryData, error) {
 		}
 
 		cursor := bucket.Cursor()
-		_, b := cursor.Last()
-
-		for b != nil && len(records) < 100 {
+		for _, b := cursor.Last(); b != nil && len(records) < 100; _, b = cursor.Prev() {
 			if err := json.Unmarshal(b, &record); err != nil {
 				return err
 			}
 			records = append(records, record)
-
-			_, b = cursor.Prev()
-			if b == nil {
-				break
-			}
 		}
 
 		return nil

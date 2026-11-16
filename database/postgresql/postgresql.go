@@ -38,11 +38,9 @@ func (p *PostgreSQL) Insert(data *schema.TelemetryData) error {
 func (p *PostgreSQL) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	var record schema.TelemetryData
 	row := p.db.QueryRow(`SELECT * FROM speedtest_users WHERE uuid = $1`, uuid)
-	if row != nil {
-		var id string
-		if err := row.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
-			return nil, err
-		}
+	var id string
+	if err := row.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
+		return nil, err
 	}
 	return &record, nil
 }
@@ -53,17 +51,15 @@ func (p *PostgreSQL) FetchLast100() ([]schema.TelemetryData, error) {
 	if err != nil {
 		return nil, err
 	}
-	if rows != nil {
-		defer rows.Close()
-		var id string
+	defer rows.Close()
+	var id string
 
-		for rows.Next() {
-			var record schema.TelemetryData
-			if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
-				return nil, err
-			}
-			records = append(records, record)
+	for rows.Next() {
+		var record schema.TelemetryData
+		if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
+			return nil, err
 		}
+		records = append(records, record)
 	}
 	return records, rows.Err()
 }

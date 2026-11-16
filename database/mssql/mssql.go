@@ -51,11 +51,9 @@ func (p *MSSQL) Insert(data *schema.TelemetryData) error {
 func (p *MSSQL) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	var record schema.TelemetryData
 	row := p.db.QueryRow(`SELECT * FROM speedtest_users WHERE uuid = @p1`, uuid)
-	if row != nil {
-		var id int64
-		if err := row.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
-			return nil, fmt.Errorf("mssql fetch by uuid: %w", err)
-		}
+	var id int64
+	if err := row.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
+		return nil, fmt.Errorf("mssql fetch by uuid: %w", err)
 	}
 	return &record, nil
 }
@@ -66,16 +64,14 @@ func (p *MSSQL) FetchLast100() ([]schema.TelemetryData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mssql fetch last 100: %w", err)
 	}
-	if rows != nil {
-		defer rows.Close()
-		for rows.Next() {
-			var record schema.TelemetryData
-			var id int64
-			if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
-				return nil, fmt.Errorf("mssql scan row: %w", err)
-			}
-			records = append(records, record)
+	defer rows.Close()
+	for rows.Next() {
+		var record schema.TelemetryData
+		var id int64
+		if err := rows.Scan(&id, &record.Timestamp, &record.IPAddress, &record.ISPInfo, &record.Extra, &record.UserAgent, &record.Language, &record.Download, &record.Upload, &record.Ping, &record.Jitter, &record.Log, &record.UUID); err != nil {
+			return nil, fmt.Errorf("mssql scan row: %w", err)
 		}
+		records = append(records, record)
 	}
 	return records, rows.Err()
 }

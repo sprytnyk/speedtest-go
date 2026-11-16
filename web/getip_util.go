@@ -16,21 +16,11 @@ func normalizeCandidateIP(raw string, ipv6 bool) string {
 	if idx := strings.Index(ip, ","); idx != -1 {
 		ip = strings.TrimSpace(ip[:idx])
 	}
-	if ip == "" {
-		return ""
-	}
-	if ipv6 {
-		parsed := net.ParseIP(ip)
-		if parsed != nil && parsed.To16() != nil && parsed.To4() == nil {
-			return strings.TrimPrefix(ip, "::ffff:")
-		}
-		return ""
-	}
 	parsed := net.ParseIP(ip)
-	if parsed != nil {
-		return strings.TrimPrefix(ip, "::ffff:")
+	if parsed == nil || (ipv6 && parsed.To4() != nil) {
+		return ""
 	}
-	return ""
+	return strings.TrimPrefix(ip, "::ffff:")
 }
 
 // getClientIP extracts the real client IP from the request using the following
@@ -42,23 +32,16 @@ func normalizeCandidateIP(raw string, ipv6 bool) string {
 //  4. X-Forwarded-For (first address in the chain)
 //  5. RemoteAddr (fallback)
 func getClientIP(r *http.Request) string {
-	// 1. Cloudflare IPv6 header — must be a valid IPv6 address
-	if cf := r.Header.Get("CF-Connecting-IPv6"); cf != "" {
-		if ip := normalizeCandidateIP(cf, true); ip != "" {
+	if ip := normalizeCandidateIP(r.Header.Get("CF-Connecting-IPv6"), true); ip != "" {
+		return ip
+	}
+
+	for _, header := range []string{"Client-IP", "X-Real-IP", "X-Forwarded-For"} {
+		if ip := normalizeCandidateIP(r.Header.Get(header), false); ip != "" {
 			return ip
 		}
 	}
 
-	// 2–4. Other forwarding / proxy headers — accept any valid IP
-	for _, header := range []string{"Client-IP", "X-Real-IP", "X-Forwarded-For"} {
-		if v := r.Header.Get(header); v != "" {
-			if ip := normalizeCandidateIP(v, false); ip != "" {
-				return ip
-			}
-		}
-	}
-
-	// 5. Fallback: RemoteAddr set by the server
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		// RemoteAddr may not have a port in some environments

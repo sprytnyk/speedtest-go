@@ -79,7 +79,7 @@ type StatsEntry struct {
 }
 
 var (
-	key   = []byte(securecookie.GenerateRandomKey(32))
+	key   = securecookie.GenerateRandomKey(32)
 	store = sessions.NewCookieStore(key)
 
 	//go:embed stats.html
@@ -96,7 +96,7 @@ var (
 func initStatsSession(c *config.Config) {
 	store.Options = &sessions.Options{
 		Path:     c.BaseURL + "/stats",
-		MaxAge:   3600 * 1, // 1 hour
+		MaxAge:   3600, // 1 hour
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	}
@@ -413,25 +413,19 @@ func humanizeKey(k string) string {
 		b.WriteRune(unicode.ToLower(r))
 		prevLower = unicode.IsLower(r) || unicode.IsDigit(r)
 	}
-	s := strings.Join(strings.Fields(b.String()), " ")
-	for _, word := range []string{"ip", "isp", "id", "url", "asn", "iso"} {
-		s = replaceWord(s, word, strings.ToUpper(word))
+	words := strings.Fields(b.String())
+	for i, word := range words {
+		switch word {
+		case "ip", "isp", "id", "url", "asn", "iso":
+			words[i] = strings.ToUpper(word)
+		}
 	}
+	s := strings.Join(words, " ")
 	if s == "" {
 		return k
 	}
 	r, size := utf8.DecodeRuneInString(s)
 	return string(unicode.ToUpper(r)) + s[size:]
-}
-
-func replaceWord(s, word, with string) string {
-	words := strings.Split(s, " ")
-	for i, w := range words {
-		if w == word {
-			words[i] = with
-		}
-	}
-	return strings.Join(words, " ")
 }
 
 // readableLanguages turns an Accept-Language header into "uk-UA, uk, en-US"

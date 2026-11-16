@@ -73,7 +73,7 @@ func ReleaseURL() string {
 
 var (
 	configFile   string
-	loadedConfig *Config = nil
+	loadedConfig *Config
 )
 
 func init() {

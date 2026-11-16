@@ -8,8 +8,7 @@ import (
 
 // Credit: https://stackoverflow.com/questions/49589685/good-way-to-disable-directory-listing-with-http-fileserver-in-go
 type justFilesFilesystem struct {
-	fs http.FileSystem
-	// readDirBatchSize - configuration parameter for `Readdir` func
+	fs               http.FileSystem
 	readDirBatchSize int
 }
 
@@ -31,24 +30,22 @@ func (e neuteredStatFile) Stat() (os.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if s.IsDir() {
-	LOOP:
-		for {
-			fl, err := e.File.Readdir(e.readDirBatchSize)
-			switch err {
-			case io.EOF:
-				break LOOP
-			case nil:
-				for _, f := range fl {
-					if f.Name() == "index.html" {
-						return s, err
-					}
-				}
-			default:
-				return nil, err
-			}
-		}
-		return nil, os.ErrNotExist
+	if !s.IsDir() {
+		return s, nil
 	}
-	return s, err
+	for {
+		files, err := e.File.Readdir(e.readDirBatchSize)
+		switch err {
+		case io.EOF:
+			return nil, os.ErrNotExist
+		case nil:
+			for _, f := range files {
+				if f.Name() == "index.html" {
+					return s, nil
+				}
+			}
+		default:
+			return nil, err
+		}
+	}
 }

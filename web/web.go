@@ -99,26 +99,27 @@ func newRouter(conf *config.Config) *chi.Mux {
 }
 
 func listenProxyProtocol(conf *config.Config, r *chi.Mux) {
-	if conf.ProxyProtocolPort != "0" {
-		addr := net.JoinHostPort(conf.BindAddress, conf.ProxyProtocolPort)
-		l, err := net.Listen("tcp", addr)
-		if err != nil {
-			log.Fatalf("Cannot listen on proxy protocol port %s: %s", conf.ProxyProtocolPort, err)
-		}
-
-		pl := &proxyproto.Listener{Listener: l}
-		defer pl.Close()
-
-		log.Infof("Starting proxy protocol listener on %s", addr)
-		log.Fatal(newServer(r).Serve(pl))
+	if conf.ProxyProtocolPort == "0" {
+		return
 	}
+	addr := net.JoinHostPort(conf.BindAddress, conf.ProxyProtocolPort)
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("Cannot listen on proxy protocol port %s: %s", conf.ProxyProtocolPort, err)
+	}
+
+	pl := &proxyproto.Listener{Listener: l}
+	defer pl.Close()
+
+	log.Infof("Starting proxy protocol listener on %s", addr)
+	log.Fatal(newServer(r).Serve(pl))
 }
 
-func pages(fs http.FileSystem, BaseURL string) http.HandlerFunc {
+func pages(fs http.FileSystem, baseURL string) http.HandlerFunc {
 	fileServer := http.FileServer(fs)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if BaseURL != "" {
-			r.URL.Path = "/" + strings.TrimPrefix(r.URL.Path, BaseURL+"/")
+		if baseURL != "" {
+			r.URL.Path = "/" + strings.TrimPrefix(r.URL.Path, baseURL+"/")
 		}
 		fileServer.ServeHTTP(w, r)
 	}
@@ -173,12 +174,7 @@ func garbage(w http.ResponseWriter, r *http.Request) {
 			log.Errorf("Invalid chunk size: %s", ckSize)
 			log.Warnf("Will use default value %d", chunks)
 		} else {
-			// limit max chunk size to 1024
-			if i > 1024 {
-				chunks = 1024
-			} else {
-				chunks = int(i)
-			}
+			chunks = int(min(i, 1024))
 		}
 	}
 
