@@ -64,8 +64,8 @@ func newRouter(conf *config.Config) *chi.Mux {
 	r.Use(middleware.Recoverer)
 
 	var assetFS http.FileSystem
-	if fi, err := os.Stat(conf.AssetsPath); os.IsNotExist(err) || !fi.IsDir() {
-		log.Warnf("Configured asset path %s does not exist or is not a directory, using default assets", conf.AssetsPath)
+	if fi, err := os.Stat(conf.AssetsPath); err != nil || !fi.IsDir() {
+		log.Warnf("Cannot use configured asset path %s, using default assets", conf.AssetsPath)
 		sub, err := fs.Sub(defaultAssets, "assets")
 		if err != nil {
 			log.Fatalf("Failed when processing default assets: %s", err)

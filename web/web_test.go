@@ -68,6 +68,23 @@ func TestStabilityPage(t *testing.T) {
 	}
 }
 
+func TestAssetsFallbackOnStatError(t *testing.T) {
+	// A NUL makes Stat fail with an invalid-path error rather than "not found".
+	r := newRouter(&config.Config{AssetsPath: "\x00"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /: status %d, want %d", w.Code, http.StatusOK)
+	}
+	want, err := defaultAssets.ReadFile("assets/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Body.String() != string(want) {
+		t.Error("GET / did not serve the bundled index")
+	}
+}
+
 func TestVersionInfo(t *testing.T) {
 	defer func(v string) { config.Version = v }(config.Version)
 	versions := []struct{ version, body string }{
