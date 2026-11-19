@@ -11,6 +11,7 @@ A self-hosted speed test in a single Go binary. The browser measures download, u
 XMLHttpRequest and Web Workers, and the web UI is built into the binary, so there is nothing else to install.
 
 This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedtest-go).
+The [upstream notes](docs/upstream.md) list the commits we've reviewed and what we took from them.
 
 ![Speed test](docs/screenshots/speedtest.png)
 
@@ -233,18 +234,22 @@ button with a result image, and the statistics page. To turn it on:
     ```
 
     `basic` stores the results only. `full` also stores the test log, which the statistics page shows.
+
 4. Put your contact address into the privacy policy in `index.html` in place of `krlsv@pm.me`. The page shows a note
    above the start button that links to the policy.
+
+The server accepts telemetry requests up to 1 MiB. It rejects larger requests before saving a result.
 
 You can then open a stored test at:
 
 * `/results/?id=<id>`: the result image, in Ukrainian with `&lang=uk`
 * `/results/json?id=<id>`: the result as JSON
-* `/stats/`: the latest 100 tests, and every detail of a single test. You can delete tests there one by one, a
-  selection at a time, or all at once
+* `/stats/`: stored tests, 100 per page, newest first. Find a test by ID or IP address. Filter by date or set a
+  minimum for download speed, upload speed, idle latency, or jitter. Delete one test, selected tests, or all tests.
 
 ### Databases
 
+* **Memory** keeps the latest 100 tests until the server restarts.
 * **SQLite** and **BoltDB** need nothing but the file, and SQLite runs in WAL mode.
 * For **PostgreSQL**, **MySQL** and **MSSQL**, create the database and import the schema from
   `database/{postgresql,mysql,mssql}`, for example `psql speedtest < database/postgresql/telemetry_postgresql.sql`.
