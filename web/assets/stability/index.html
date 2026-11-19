@@ -1696,7 +1696,7 @@
             playBeep();
           }
 
-          if (data.testState >= 4) {
+          if (running && data.testState >= 4) {
             stopTest();
           }
           dirty = true;
