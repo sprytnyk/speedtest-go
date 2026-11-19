@@ -487,87 +487,77 @@ function ulTest(done) {
 	reqsmall.push(r);
 	reqsmall = new Blob(reqsmall);
 	const testFunction = function() {
-		let totLoaded = 0.0, // total number of transmitted bytes
+		let completedBytes = 0, // measured bytes from requests that received a successful response
 			startT = new Date().getTime(), // timestamp when test was started
 			bonusT = 0, //how many milliseconds the test has been shortened by (higher on faster connections)
 			graceTimeDone = false, //set to true after the grace time is past
 			failed = false; // set to true if a stream fails
-		xhr = [];
+		const requests = [];
+		const streams = [];
+		xhr = requests;
+		// Include active progress on healthy streams so slow uploads can count at the deadline.
+		const measuredBytes = () => streams.reduce(
+			(total, stream) => total + (stream.awaitingSuccess ? 0 : stream.loaded - stream.warmupLoaded),
+			completedBytes
+		);
 		// function to create an upload stream. streams are slightly delayed so that they will not end at the same time
 		const testStream = function(i, delay) {
 			setTimeout(
 				function() {
-					if (testState !== 3) return; // delayed stream ended up starting after the end of the upload test
+					if (xhr !== requests || failed) return;
 					tverb("ul test stream started " + i + " " + delay);
-					let prevLoaded = 0; // number of bytes transmitted last time onprogress was called
-					let x = new XMLHttpRequest();
-					xhr[i] = x;
-					let ie11workaround;
-					if (settings.forceIE11Workaround) ie11workaround = true;
-					else {
-						try {
-							xhr[i].upload.onprogress;
-							ie11workaround = false;
-						} catch (e) {
-							ie11workaround = true;
-						}
-					}
-					if (ie11workaround) {
-						// IE11 workaround: xhr.upload does not work properly, therefore we send a bunch of small 256k requests and use the onload event as progress. This is not precise, especially on fast connections
-						xhr[i].onload = xhr[i].onerror = function() {
-							tverb("ul stream progress event (ie11wa)");
-							totLoaded += reqsmall.size;
-							testStream(i, 0);
-						};
-						xhr[i].open("POST", settings.url_ul + url_sep(settings.url_ul) + (settings.mpot ? "cors=true&" : "") + "r=" + Math.random(), true); // random string to prevent caching
-						try {
-							xhr[i].setRequestHeader("Content-Encoding", "identity"); // disable compression (some browsers may refuse it, but data is incompressible anyway)
-						} catch (e) {}
-						//No Content-Type header in MPOT branch because it triggers bugs in some browsers
-						xhr[i].send(reqsmall);
-					} else {
-						// REGULAR version, no workaround
-						xhr[i].upload.onprogress = function(event) {
+					const request = new XMLHttpRequest();
+					const stream = streams[i];
+					requests[i] = request;
+					const smallChunks = settings.forceIE11Workaround || !request.upload;
+					if (!smallChunks) {
+						request.upload.onprogress = function(event) {
+							if (requests[i] !== request) return;
 							tverb("ul stream progress event " + i + " " + event.loaded);
-							if (testState !== 3) {
-								try {
-									x.abort();
-								} catch (e) {}
-							} // just in case this XHR is still running after the upload test
-							// progress event, add number of new loaded bytes to totLoaded
-							const loadDiff = event.loaded <= 0 ? 0 : event.loaded - prevLoaded;
-							if (isNaN(loadDiff) || !isFinite(loadDiff) || loadDiff < 0) return; // just in case
-							totLoaded += loadDiff;
-							prevLoaded = event.loaded;
-						}.bind(this);
-						xhr[i].upload.onload = function() {
-							// this stream sent all the garbage data, start again
+							if (isFinite(event.loaded) && event.loaded >= stream.loaded) stream.loaded = event.loaded;
+						};
+					}
+					// Only the request's response can confirm that the server accepted the upload.
+					const finishStream = function(success) {
+						if (xhr !== requests || requests[i] !== request) return;
+						delete requests[i];
+						const sentBytes = stream.loaded - stream.warmupLoaded;
+						stream.loaded = 0;
+						stream.warmupLoaded = 0;
+						stream.awaitingSuccess = !success;
+						if (success) {
 							tverb("ul stream finished " + i);
+							completedBytes += smallChunks ? reqsmall.size : sentBytes;
 							testStream(i, 0);
-						}.bind(this);
-						xhr[i].upload.onerror = function() {
+						} else {
 							tverb("ul stream failed " + i);
 							if (settings.xhr_ignoreErrors === 0) failed = true; //abort
-							try {
-								xhr[i].abort();
-							} catch (e) {}
-							delete xhr[i];
 							if (settings.xhr_ignoreErrors === 1) testStream(i, 0); //restart stream
-						}.bind(this);
-						// send xhr
-						xhr[i].open("POST", settings.url_ul + url_sep(settings.url_ul) + (settings.mpot ? "cors=true&" : "") + "r=" + Math.random(), true); // random string to prevent caching
-						try {
-							xhr[i].setRequestHeader("Content-Encoding", "identity"); // disable compression (some browsers may refuse it, but data is incompressible anyway)
-						} catch (e) {}
-						//No Content-Type header in MPOT branch because it triggers bugs in some browsers
-						xhr[i].send(req);
-					}
+						}
+					};
+					const responseAccepted = () => request.status >= 200 && request.status < 300;
+					request.onreadystatechange = () => {
+						// The test can end before the rest of an error response arrives.
+						if (request.readyState === XMLHttpRequest.HEADERS_RECEIVED && !responseAccepted()) {
+							finishStream(false);
+							request.abort();
+						}
+					};
+					request.onload = () => finishStream(responseAccepted());
+					request.onerror = () => finishStream(false);
+					request.open("POST", settings.url_ul + url_sep(settings.url_ul) + (settings.mpot ? "cors=true&" : "") + "r=" + Math.random(), true); // random string to prevent caching
+					try {
+						request.setRequestHeader("Content-Encoding", "identity"); // disable compression (some browsers may refuse it, but data is incompressible anyway)
+					} catch (e) {}
+					// No Content-Type header in MPOT branch because it triggers bugs in some browsers.
+					request.send(smallChunks ? reqsmall : req);
 				}.bind(this),
 				delay
 			);
 		}.bind(this);
 		// open streams
 		for (let i = 0; i < settings.xhr_ulMultistream; i++) {
+			streams.push({ loaded: 0, warmupLoaded: 0, awaitingSuccess: false });
 			testStream(i, settings.xhr_multistreamDelay * i);
 		}
 		// every 200ms, update ulStatus
@@ -577,36 +567,35 @@ function ulTest(done) {
 				const t = new Date().getTime() - startT;
 				if (graceTimeDone) ulProgress = (t + bonusT) / (settings.time_ul_max * 1000);
 				if (t < 200) return;
-				if (!graceTimeDone) {
+				if (!graceTimeDone && !failed) {
 					if (t > 1000 * settings.time_ulGraceTime) {
-						if (totLoaded > 0) {
+						if (measuredBytes() > 0) {
 							// if the connection is so slow that we didn't get a single chunk yet, do not reset
 							startT = new Date().getTime();
 							bonusT = 0;
-							totLoaded = 0.0;
+							completedBytes = 0;
+							streams.forEach((stream) => { stream.warmupLoaded = stream.loaded; });
 						}
 						graceTimeDone = true;
 						warmingUp = false;
 					}
-				} else {
-					const speed = totLoaded / (t / 1000.0);
-					if (settings.time_auto) {
-						//decide how much to shorten the test. Every 200ms, the test is shortened by the bonusT calculated here
-						const bonus = (5.0 * speed) / 100000;
-						bonusT += bonus > 400 ? 400 : bonus;
-					}
-					//update status
-					ulStatus = ((speed * 8 * settings.overheadCompensationFactor) / (settings.useMebibits ? 1048576 : 1000000)).toFixed(2); // speed is multiplied by 8 to go from bytes to bits, overhead compensation is applied, then everything is divided by 1048576 or 1000000 to go to megabits/mebibits
-					if ((t + bonusT) / 1000.0 > settings.time_ul_max || failed) {
-						// test is over, stop streams and timer
-						if (failed || isNaN(ulStatus)) ulStatus = "Fail";
-						clearRequests();
-						clearInterval(interval);
-						ulProgress = 1;
-						warmingUp = false;
-						tlog("ulTest: " + ulStatus + ", took " + (new Date().getTime() - startT) + "ms");
-						done();
-					}
+					return;
+				}
+				const speed = measuredBytes() / (t / 1000.0);
+				if (settings.time_auto) {
+					// Shorten the test using only bytes the server has accepted.
+					const bonus = (5.0 * completedBytes / (t / 1000.0)) / 100000;
+					bonusT += bonus > 400 ? 400 : bonus;
+				}
+				ulStatus = ((speed * 8 * settings.overheadCompensationFactor) / (settings.useMebibits ? 1048576 : 1000000)).toFixed(2);
+				if (failed || (t + bonusT) / 1000.0 > settings.time_ul_max) {
+					if (failed || isNaN(ulStatus)) ulStatus = "Fail";
+					clearRequests();
+					clearInterval(interval);
+					ulProgress = 1;
+					warmingUp = false;
+					tlog("ulTest: " + ulStatus + ", took " + (new Date().getTime() - startT) + "ms");
+					done();
 				}
 			}.bind(this),
 			200
