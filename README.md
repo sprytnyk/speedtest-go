@@ -179,8 +179,8 @@ and 47 to 51 Mbps when it chose HTTP/3 itself.
 ### Use BBR on the server
 
 Linux uses cubic congestion control by default. When a cubic connection loses packets, it slows down, and at 45 ms
-it takes seconds to speed up again. `time_auto` ends a fast test after 6 to 9 seconds, so the test ended before the
-connections caught up. With BBR, the page's average rose from 62 to 84 Mbps. One connection reached 57 to 90 Mbps,
+it takes seconds to speed up again. `time_auto` ends a fast download after 6 to 9 seconds and a fast upload after
+about 12, so the download ended before the connections caught up. With BBR, the page's average rose from 62 to 84 Mbps. One connection reached 57 to 90 Mbps,
 up from 30 to 36 Mbps with cubic. To switch, run as root:
 
 ```
