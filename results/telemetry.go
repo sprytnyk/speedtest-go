@@ -2,6 +2,9 @@ package results
 
 import (
 	"crypto/rand"
+	"errors"
+	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"regexp"
@@ -15,6 +18,8 @@ import (
 	"github.com/oklog/ulid/v2"
 	log "github.com/sirupsen/logrus"
 )
+
+const maxTelemetryBodyBytes = 1 << 20
 
 var (
 	ipv4Regex     = regexp.MustCompile(`(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)`)
@@ -40,10 +45,38 @@ func Initialize(c *config.Config) {
 	initFonts()
 }
 
+func parseTelemetryForm(w http.ResponseWriter, r *http.Request) error {
+	if r.ContentLength > maxTelemetryBodyBytes {
+		return &http.MaxBytesError{Limit: maxTelemetryBodyBytes}
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxTelemetryBodyBytes)
+	// ParseMultipartForm alone can return ErrNotMultipart in place of a URL-encoded form error.
+	err := r.ParseForm()
+	if err == nil {
+		err = r.ParseMultipartForm(maxTelemetryBodyBytes)
+	}
+	if err != nil && err != http.ErrNotMultipart {
+		return err
+	}
+	// The multipart parser can stop at the closing boundary before the body ends.
+	_, err = io.Copy(io.Discard, r.Body)
+	return err
+}
+
 func Record(w http.ResponseWriter, r *http.Request) {
 	conf := config.LoadedConfig()
 	if conf.DatabaseType == "none" {
 		render.PlainText(w, r, "Telemetry is disabled")
+		return
+	}
+
+	if err := parseTelemetryForm(w, r); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) || errors.Is(err, multipart.ErrMessageTooLarge) {
+			http.Error(w, "Telemetry request is too large", http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "Invalid telemetry form", http.StatusBadRequest)
+		}
 		return
 	}
 
