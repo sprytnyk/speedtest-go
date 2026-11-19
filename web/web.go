@@ -1,8 +1,10 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"net"
@@ -11,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -180,10 +183,18 @@ func garbage(w http.ResponseWriter, r *http.Request) {
 
 	for i := 0; i < chunks; i++ {
 		if _, err := w.Write(randomData); err != nil {
-			log.Errorf("Error writing back to client at chunk number %d: %s", i, err)
+			// The test normally ends by canceling its open download requests.
+			if !clientDisconnected(r, err) {
+				log.Errorf("Error writing back to client at chunk number %d: %s", i, err)
+			}
 			break
 		}
 	}
+}
+
+func clientDisconnected(r *http.Request, err error) bool {
+	return errors.Is(r.Context().Err(), context.Canceled) ||
+		errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
 
 // versionInfo returns the running speedtest-go version for the page footers.
@@ -212,7 +223,7 @@ func getIP(w http.ResponseWriter, r *http.Request) {
 	if desc := classifyPrivateIP(clientIP); desc != "" {
 		ret.ProcessedString = clientIP + " - " + desc
 		b, _ := json.Marshal(&ret)
-		if _, err := w.Write(b); err != nil {
+		if _, err := w.Write(b); err != nil && !clientDisconnected(r, err) {
 			log.Errorf("Error writing to client: %s", err)
 		}
 		return

@@ -2,7 +2,9 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"image/png"
 	"io"
 	"mime/multipart"
@@ -12,9 +14,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/librespeed/speedtest-go/config"
 	"github.com/librespeed/speedtest-go/database"
@@ -227,5 +231,48 @@ url_base = "/speedtest"
 	}
 	if records, err := database.DB.FetchPage(0, 100); err != nil || len(records) != 2 {
 		t.Fatalf("stored %d records, want only the two valid submissions: %v", len(records), err)
+	}
+}
+
+type failedResponseWriter struct {
+	http.ResponseWriter
+	err    error
+	writes int
+}
+
+func (w *failedResponseWriter) Write([]byte) (int, error) {
+	w.writes++
+	return 0, w.err
+}
+
+func TestGarbageWriteErrors(t *testing.T) {
+	var logs bytes.Buffer
+	logger := log.StandardLogger()
+	original := logger.Out
+	logger.SetOutput(&logs)
+	t.Cleanup(func() { logger.SetOutput(original) })
+
+	writeError := errors.New("test write failure")
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, tc := range []struct {
+		name string
+		ctx  context.Context
+		err  error
+		log  bool
+	}{
+		{"client canceled", canceled, writeError, false},
+		{"broken pipe", context.Background(), &os.SyscallError{Syscall: "write", Err: syscall.EPIPE}, false},
+		{"connection reset", context.Background(), syscall.ECONNRESET, false},
+		{"unexpected error", context.Background(), writeError, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logs.Reset()
+			w := &failedResponseWriter{ResponseWriter: httptest.NewRecorder(), err: tc.err}
+			garbage(w, httptest.NewRequest(http.MethodGet, "/garbage?ckSize=2", nil).WithContext(tc.ctx))
+			if w.writes != 1 || (logs.Len() > 0) != tc.log {
+				t.Errorf("writes = %d, log = %q", w.writes, logs.String())
+			}
+		})
 	}
 }
