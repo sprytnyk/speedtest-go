@@ -78,6 +78,14 @@ docker run -d -p 8989:8989 -e SPEEDTEST_DATABASE_TYPE=sqlite -e SPEEDTEST_DATABA
   -v speedtest-data:/data ghcr.io/sprytnyk/speedtest-go:latest
 ```
 
+The image also has a copy of the web UI in `/app/assets`. To offer [several test servers](#multiple-servers), mount
+your `server-list.json` there and point `assets_path` at that folder:
+
+```
+docker run -d -p 8989:8989 -e SPEEDTEST_ASSETS_PATH=/app/assets \
+  -v "$PWD/server-list.json:/app/assets/server-list.json:ro" ghcr.io/sprytnyk/speedtest-go:latest
+```
+
 ### systemd
 
 [`systemd/`](systemd/) has a hardened unit with socket activation and setup steps. Two things to know:

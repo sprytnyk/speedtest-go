@@ -13,6 +13,7 @@ FROM scratch
 WORKDIR /app
 COPY --from=build_base /build/speedtest ./
 COPY settings.toml ./
+COPY web/assets ./assets
 
 EXPOSE 8989
 
