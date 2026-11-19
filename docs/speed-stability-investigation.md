@@ -1,20 +1,18 @@
 # Speed and stability release check
 
-On 2026-11-19, the current worktree passed the speed test and `/stability/?load=all` in Chromium. The numbers matched
-the recorded measurements. The upload worker dropped rejected bytes, and the stability test still finished in
-about a minute. These runs found no measurement bug that would block the release.
+On 2026-11-19, I ran the speed test and `/stability/?load=all` in Chromium on this build and on v5.1.2. The numbers
+match, the upload no longer counts rejected bytes, and the stability test still takes about a minute. I found no
+measurement bug that would block the release.
 
 ## Live comparison with v5.1.2
 
-Both builds ran on localhost and used the same settings and the configured single test server. The baseline was
-v5.1.2 (`70b7178`). Tests ran one at a time with the VPN on and CAKE active. All 73 route checks pointed to the VPN.
-Every run reported 0% packet loss under load.
+Both builds ran on localhost against the same test server, one test at a time, over the VPN with CAKE on. The
+baseline was v5.1.2 (`70b7178`). No run lost a packet under load.
 
 ### Speed test
 
-The page matched the worker readings for speed, idle ping and jitter, and latency under load. The saved results
-matched too. I recalculated the loaded latency and jitter, their ranges, and their percentiles from the individual
-pings. Three runs on the current build explicitly enabled the multi-server flag (`mpot`) against the same server.
+The page, the saved results, and the latency recalculated from the raw pings all agreed. Three runs on the current
+build turned on the multi-server flag (`mpot`) against the same server.
 
 | Build | Run | Flag | Down / up (Mbps) | Idle ping avg / jitter (ms) | Loaded p95 down / up (ms) | Upload measurement (s) |
 | --- | ---: | --- | --- | --- | --- | ---: |
@@ -30,15 +28,15 @@ pings. Three runs on the current build explicitly enabled the multi-server flag 
 | Current | 7 | On | 86.67 / 81.58 | 47.20 / 1.07 | 50.0 / 50.3 | 8.60 |
 | Current | 8 | Off | 79.77 / 82.49 | 53.24 / 0.35 | 52.5 / 48.6 | 8.60 |
 
-The recorded pings confirmed the 356 ms download p95 in current run 4. The two repeats with the flag on came back
-near 50 ms. The download measurement took about 5.2 seconds on both builds. The upload times in the table exclude
-about 3.2 seconds of warm-up.
+The 356 ms download p95 in current run 4 was real. The raw pings show it, and the two repeats with the flag on came
+back near 50 ms. The download took about 5.2 seconds on both builds. The upload times leave out the 3.2 second
+warm-up.
 
 ### Stability with idle, download, and upload
 
-I recalculated the overall and per-phase latency, jitter, ranges, p50, p95, and packet loss from the recorded pings.
-They matched the worker results. The phase table showed the matching speeds and latency readings. In the current
-build's third run, the upload phase included a 297.5 ms ping, with a p95 of 50.5 ms.
+The latency, jitter, p50, p95, and packet loss recalculated from the raw pings matched what the page showed, both
+overall and per phase. In the current build's third run, the upload phase had one 297.5 ms ping, with a p95 of
+50.5 ms.
 
 | Build | Run | Down / up (Mbps) | p95 idle / down / up (ms) | Pings | Browser elapsed (s) |
 | --- | ---: | --- | --- | ---: | ---: |
@@ -51,23 +49,24 @@ build's third run, the upload phase included a 297.5 ms ping, with a p95 of 50.5
 
 ## Why the speed test uploads for longer
 
-With `time_auto` enabled, v5.1.2 shortened the upload based on bytes sent so far. The current worker shortens the
-timer once requests finish with a successful HTTP response. Until then, the speed can reflect progress from active
-requests. Stability uses fixed phase lengths with `time_auto` disabled.
+With `time_auto` on, v5.1.2 shortened the upload by the bytes sent so far. The current worker shortens it only by
+bytes the server has confirmed with a successful reply. The speed shown still counts the bytes in flight. The
+stability test has `time_auto` off and fixed phase lengths, so this doesn't change it.
 
 On the same simulated connection, the measurement took 5.2 seconds on v5.1.2 and 8.0 seconds with the new worker.
 Feeding the v5.1.2 byte count into the new timer brought it back to 5.2 seconds, with both builds reporting about
 84.7 Mbps. With `time_auto` off, both measured for 15.2 seconds.
 
-The current worker also waits for the server's reply before starting the next request on that stream. In a loopback
-test with 1 MiB requests and a 200 ms reply delay, measured upload speed dropped from 240.19 to 110.10 Mbps. Small
-requests and slow replies make that wait more visible.
+The current worker also waits for the server's reply before it sends the next request on that stream. With 1 MiB
+requests and a server that waits 200 ms to reply, upload on localhost dropped from 240.19 to 110.10 Mbps. The real
+test sends 20 MB at a time, or 4 MB on Chrome mobile, and the server replies at once. In 10 upload-only pairs in
+Firefox against the same server, both builds had a median upload of 84 Mbps.
 
 ## Rejected uploads
 
-Before the fix, the worker waited for the HTTP response body to finish before dropping the bytes from a rejected
-request. A server that sent HTTP 413 headers and kept the response open could leave an 83.23 Mbps reading on the
-screen. The worker now drops those bytes as soon as the rejection headers arrive.
+Before the fix, the worker dropped the bytes of a rejected request only once the whole error reply had arrived. A
+server that sent HTTP 413 and kept the reply open could leave 83.23 Mbps on the screen. The worker now drops those
+bytes as soon as the error status arrives.
 
 | Loopback browser check | Final reading (Mbps) |
 | --- | ---: |
@@ -75,5 +74,5 @@ screen. The worker now drops those bytes as soon as the rejection headers arrive
 | HTTP 413 with delayed response body | 0.00 |
 | HTTP 200 with delayed response body | 84.62 |
 
-Nine upload checks also passed, including a rejected stream alongside a successful one, network errors, retries,
-and a user abort. `go test -count=1 ./...` passed.
+Nine more upload checks passed, among them a rejected stream next to a working one, network errors, retries, and
+the user pressing Stop. `go test -count=1 ./...` passed.
