@@ -1,6 +1,7 @@
 package results
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"github.com/librespeed/speedtest-go/database"
 	"github.com/librespeed/speedtest-go/database/memory"
 	"github.com/librespeed/speedtest-go/database/schema"
+	"github.com/librespeed/speedtest-go/database/sqlite"
 )
 
 func TestReadableFields(t *testing.T) {
@@ -230,6 +232,177 @@ func TestStatsPage(t *testing.T) {
 	}
 }
 
+func TestStatsPagination(t *testing.T) {
+	loadTestConfig(t, "database_type=\"sqlite\"\nstatistics_password=\"test-login\"\nurl_base=\"/speedtest\"\n")
+	database.DB = sqlite.Open(filepath.Join(t.TempDir(), "speedtest.sqlite"))
+	testID := func(number int) string { return fmt.Sprintf("%026d", number) }
+	for i := 1; i <= 201; i++ {
+		if err := database.DB.Insert(&schema.TelemetryData{UUID: testID(i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const statsURL = "/speedtest/stats/"
+	var cookies []*http.Cookie
+	request := func(method, url string, form string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, url, strings.NewReader(form))
+		if method == http.MethodPost {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		for _, cookie := range cookies {
+			req.AddCookie(cookie)
+		}
+		rec := httptest.NewRecorder()
+		Stats(rec, req)
+		return rec
+	}
+	if rec := request(http.MethodGet, statsURL+"?page=2", ""); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), `name="password"`) || strings.Contains(rec.Body.String(), testID(101)) {
+		t.Fatal("page 2 must require sign-in")
+	}
+	login := request(http.MethodPost, statsURL+"?op=login", "password=test-login")
+	if login.Code != http.StatusSeeOther || len(login.Result().Cookies()) == 0 {
+		t.Fatalf("sign-in returned %d", login.Code)
+	}
+	cookies = login.Result().Cookies()
+
+	for _, tc := range []struct {
+		query          string
+		rows, firstID  int
+		previous, next string
+	}{
+		{"", 100, 201, "", statsURL + "?page=2"},
+		{"?id=L100", 100, 201, "", statsURL + "?page=2"},
+		{"?page=-1", 100, 201, "", statsURL + "?page=2"},
+		{"?page=9223372036854775807", 100, 201, "", statsURL + "?page=2"},
+		{"?page=2", 100, 101, statsURL, statsURL + "?page=3"},
+		{"?page=3", 1, 1, statsURL + "?page=2", ""},
+	} {
+		rec := request(http.MethodGet, statsURL+tc.query, "")
+		body := rec.Body.String()
+		if count := strings.Count(body, `form="delete-selected" aria-label=`); rec.Code != http.StatusOK || count != tc.rows {
+			t.Fatalf("%s: got %d and %d rows, want %d and %d", tc.query, rec.Code, count, http.StatusOK, tc.rows)
+		}
+		for i := 0; i < tc.rows; i++ {
+			link := `href="` + statsURL + "?id=" + testID(tc.firstID-i)
+			if !strings.Contains(body, link) {
+				t.Fatalf("%s: missing test %s", tc.query, testID(tc.firstID-i))
+			}
+		}
+		for _, link := range []struct{ rel, url string }{{"prev", tc.previous}, {"next", tc.next}} {
+			want := `rel="` + link.rel + `" href="`
+			if strings.Contains(body, want) != (link.url != "") || (link.url != "" && !strings.Contains(body, want+link.url+`"`)) {
+				t.Errorf("%s: wrong %s link, want %q", tc.query, link.rel, link.url)
+			}
+		}
+	}
+	view := request(http.MethodGet, statsURL+"?id="+testID(1)+"&page=3", "")
+	if view.Code != http.StatusOK || !strings.Contains(view.Body.String(), `class="back" href="`+statsURL+`?page=3"`) {
+		t.Fatal("an older result must still open and link back to its page")
+	}
+
+	deleted := request(http.MethodPost, statsURL+"?page=3", "op=delete&id="+testID(1))
+	if deleted.Code != http.StatusSeeOther || deleted.Header().Get("Location") != statsURL+"?page=3" {
+		t.Fatalf("delete redirected to %q with status %d", deleted.Header().Get("Location"), deleted.Code)
+	}
+	cookies = deleted.Result().Cookies()
+	emptyPage := request(http.MethodGet, statsURL+"?page=3", "")
+	if emptyPage.Code != http.StatusSeeOther || emptyPage.Header().Get("Location") != statsURL {
+		t.Fatalf("empty page redirected to %q with status %d", emptyPage.Header().Get("Location"), emptyPage.Code)
+	}
+	latest := request(http.MethodGet, statsURL, "")
+	if latest.Code != http.StatusOK || !strings.Contains(latest.Body.String(), "Deleted tests:") {
+		t.Fatal("the list must show the delete notice after a page becomes empty")
+	}
+}
+
+func TestStatsFilters(t *testing.T) {
+	loadTestConfig(t, "database_type=\"sqlite\"\nstatistics_password=\"test-login\"\n")
+	database.DB = sqlite.Open(filepath.Join(t.TempDir(), "speedtest.sqlite"))
+	for i := 0; i < 205; i++ {
+		record := &schema.TelemetryData{
+			UUID: fmt.Sprintf("%026d", i), IPAddress: "192.0.2.10",
+			Download: "104", Upload: "84", Ping: "3", Jitter: "2",
+			Extra: `{"latency":{"idle":{"avg":12}}}`,
+		}
+		if i%2 == 0 {
+			record.IPAddress = "192.0.2.20"
+		}
+		if err := database.DB.Insert(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var cookies []*http.Cookie
+	request := func(method, target, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		if method == http.MethodPost {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		for _, cookie := range cookies {
+			req.AddCookie(cookie)
+		}
+		rec := httptest.NewRecorder()
+		Stats(rec, req)
+		return rec
+	}
+	login := request(http.MethodPost, "/stats/?op=login", "password=test-login")
+	cookies = login.Result().Cookies()
+	first := request(http.MethodGet, "/stats/?id=192.0.2.20", "")
+	if first.Code != http.StatusOK || strings.Count(first.Body.String(), `form="delete-selected" aria-label=`) != 100 ||
+		!strings.Contains(first.Body.String(), `rel="next" href="/stats/?ip=192.0.2.20&amp;page=2"`) {
+		t.Fatalf("IP search returned status %d or wrong results", first.Code)
+	}
+	second := request(http.MethodGet, "/stats/?ip=192.0.2.20&page=2", "")
+	if second.Code != http.StatusOK || strings.Count(second.Body.String(), `form="delete-selected" aria-label=`) != 3 ||
+		!strings.Contains(second.Body.String(), fmt.Sprintf("%026d", 0)) {
+		t.Fatal("IP search did not find the oldest matching results")
+	}
+	filtered := request(http.MethodGet, "/stats/?ip=192.0.2.10&download=104&upload=84&latency=12&jitter=2", "")
+	if filtered.Code != http.StatusOK || strings.Count(filtered.Body.String(), `form="delete-selected" aria-label=`) != 100 {
+		t.Fatal("combined filters failed")
+	}
+	noMatch := request(http.MethodGet, "/stats/?download=105", "")
+	if noMatch.Code != http.StatusOK || !strings.Contains(noMatch.Body.String(), "No tests match these filters.") {
+		t.Fatal("filter should find no results")
+	}
+	invalid := request(http.MethodGet, "/stats/?latency=NaN", "")
+	if !strings.Contains(invalid.Body.String(), "Check the filter values") {
+		t.Fatal("invalid filter was not reported")
+	}
+}
+
+func TestStatsMinimumFilter(t *testing.T) {
+	filter := url.Values{"download": {"10"}}
+	for _, tc := range []struct {
+		download string
+		want     bool
+	}{
+		{"NaN", false},
+		{"+Inf", false},
+		{"-Inf", false},
+		{"9.99", false},
+		{"10", true},
+		{"10.01", true},
+	} {
+		if got := matchesStats(schema.TelemetryData{Download: tc.download}, filter); got != tc.want {
+			t.Errorf("download %q: filter matched = %t, want %t", tc.download, got, tc.want)
+		}
+	}
+}
+
+func TestStatsFilterByReportedIP(t *testing.T) {
+	record := schema.TelemetryData{
+		IPAddress: "127.0.0.1",
+		ISPInfo:   `{"processedString":"192.0.2.10 - Example ISP","rawIspInfo":{"ip":"192.0.2.10"}}`,
+	}
+	if !matchesStats(record, url.Values{"ip": {"192.0.2.10"}}) {
+		t.Fatal("IP search did not match the address in the saved connection information")
+	}
+	if matchesStats(record, url.Values{"ip": {"192.0.2.20"}}) {
+		t.Fatal("IP search matched a different address")
+	}
+}
+
 func TestStatsDelete(t *testing.T) {
 	loadTestConfig(t, "database_type=\"memory\"\nstatistics_password=\"secret\"\n")
 	database.DB = memory.Open("")
@@ -254,7 +427,7 @@ func TestStatsDelete(t *testing.T) {
 		return rec
 	}
 	stored := func() []string {
-		stats, err := database.DB.FetchLast100()
+		stats, err := database.DB.FetchPage(0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}

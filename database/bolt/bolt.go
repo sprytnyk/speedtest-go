@@ -52,10 +52,9 @@ func (p *Bolt) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	return &record, err
 }
 
-func (p *Bolt) FetchLast100() ([]schema.TelemetryData, error) {
+func (p *Bolt) FetchPage(offset, limit int) ([]schema.TelemetryData, error) {
 	var records []schema.TelemetryData
 	err := p.db.View(func(tx *bbolt.Tx) error {
-		var record schema.TelemetryData
 		bucket := tx.Bucket([]byte(bucketName))
 		if bucket == nil {
 			// no test stored yet, or all of them deleted
@@ -63,7 +62,12 @@ func (p *Bolt) FetchLast100() ([]schema.TelemetryData, error) {
 		}
 
 		cursor := bucket.Cursor()
-		for _, b := cursor.Last(); b != nil && len(records) < 100; _, b = cursor.Prev() {
+		_, b := cursor.Last()
+		for i := 0; b != nil && i < offset; i++ {
+			_, b = cursor.Prev()
+		}
+		for ; b != nil && len(records) < limit; _, b = cursor.Prev() {
+			var record schema.TelemetryData
 			if err := json.Unmarshal(b, &record); err != nil {
 				return err
 			}

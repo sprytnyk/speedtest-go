@@ -58,11 +58,11 @@ func (p *MSSQL) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	return &record, nil
 }
 
-func (p *MSSQL) FetchLast100() ([]schema.TelemetryData, error) {
+func (p *MSSQL) FetchPage(offset, limit int) ([]schema.TelemetryData, error) {
 	var records []schema.TelemetryData
-	rows, err := p.db.Query(`SELECT TOP 100 * FROM speedtest_users ORDER BY timestamp DESC;`)
+	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY [timestamp] DESC, id DESC OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY;`, offset, limit)
 	if err != nil {
-		return nil, fmt.Errorf("mssql fetch last 100: %w", err)
+		return nil, fmt.Errorf("mssql fetch page: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {

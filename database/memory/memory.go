@@ -8,10 +8,7 @@ import (
 	"github.com/librespeed/speedtest-go/database/schema"
 )
 
-const (
-	// just enough records to return for FetchLast100
-	maxRecords = 100
-)
+const maxRecords = 100
 
 type Memory struct {
 	lock    sync.RWMutex
@@ -44,13 +41,17 @@ func (mem *Memory) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	return nil, errors.New("record not found")
 }
 
-func (mem *Memory) FetchLast100() ([]schema.TelemetryData, error) {
+func (mem *Memory) FetchPage(offset, limit int) ([]schema.TelemetryData, error) {
 	mem.lock.RLock()
 	defer mem.lock.RUnlock()
 	// newest first, like the other backends
-	records := make([]schema.TelemetryData, len(mem.records))
-	for i, record := range mem.records {
-		records[len(records)-1-i] = record
+	end := len(mem.records) - offset
+	if end <= 0 {
+		return nil, nil
+	}
+	records := make([]schema.TelemetryData, min(limit, end))
+	for i := range records {
+		records[i] = mem.records[end-1-i]
 	}
 	return records, nil
 }

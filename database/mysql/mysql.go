@@ -43,9 +43,9 @@ func (p *MySQL) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	return &record, nil
 }
 
-func (p *MySQL) FetchLast100() ([]schema.TelemetryData, error) {
+func (p *MySQL) FetchPage(offset, limit int) ([]schema.TelemetryData, error) {
 	var records []schema.TelemetryData
-	rows, err := p.db.Query("SELECT * FROM speedtest_users ORDER BY `timestamp` DESC LIMIT 100;")
+	rows, err := p.db.Query("SELECT * FROM speedtest_users ORDER BY `timestamp` DESC, id DESC LIMIT ? OFFSET ?;", limit, offset)
 	if err != nil {
 		return nil, err
 	}

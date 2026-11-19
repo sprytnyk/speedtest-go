@@ -18,7 +18,7 @@ func (n *None) FetchByUUID(_ string) (*schema.TelemetryData, error) {
 	return &schema.TelemetryData{}, nil
 }
 
-func (n *None) FetchLast100() ([]schema.TelemetryData, error) {
+func (n *None) FetchPage(_, _ int) ([]schema.TelemetryData, error) {
 	return []schema.TelemetryData{}, nil
 }
 

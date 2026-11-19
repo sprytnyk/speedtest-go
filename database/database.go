@@ -21,7 +21,9 @@ var (
 type DataAccess interface {
 	Insert(*schema.TelemetryData) error
 	FetchByUUID(string) (*schema.TelemetryData, error)
-	FetchLast100() ([]schema.TelemetryData, error)
+	// FetchPage returns up to limit tests, newest first. Offset is nonnegative
+	// and limit is positive.
+	FetchPage(offset, limit int) ([]schema.TelemetryData, error)
 	// DeleteByUUIDs and DeleteAll return the number of tests deleted
 	DeleteByUUIDs([]string) (int64, error)
 	DeleteAll() (int64, error)

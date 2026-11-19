@@ -75,11 +75,11 @@ func (p *SQLite) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	return &record, nil
 }
 
-func (p *SQLite) FetchLast100() ([]schema.TelemetryData, error) {
+func (p *SQLite) FetchPage(offset, limit int) ([]schema.TelemetryData, error) {
 	var records []schema.TelemetryData
-	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY timestamp DESC LIMIT 100;`)
+	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?;`, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("sqlite fetch last 100: %w", err)
+		return nil, fmt.Errorf("sqlite fetch page: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {

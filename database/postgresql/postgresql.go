@@ -45,9 +45,9 @@ func (p *PostgreSQL) FetchByUUID(uuid string) (*schema.TelemetryData, error) {
 	return &record, nil
 }
 
-func (p *PostgreSQL) FetchLast100() ([]schema.TelemetryData, error) {
+func (p *PostgreSQL) FetchPage(offset, limit int) ([]schema.TelemetryData, error) {
 	var records []schema.TelemetryData
-	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY "timestamp" DESC LIMIT 100;`)
+	rows, err := p.db.Query(`SELECT * FROM speedtest_users ORDER BY "timestamp" DESC, id DESC LIMIT $1 OFFSET $2;`, limit, offset)
 	if err != nil {
 		return nil, err
 	}

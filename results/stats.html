@@ -466,6 +466,26 @@
         font-family: ui-sans-serif, system-ui, sans-serif;
       }
 
+      .filters {
+        flex-basis: 100%;
+      }
+      .filter-fields {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+      }
+      .filter-fields label {
+        display: grid;
+        gap: 0.25rem;
+        flex: 1 1 9rem;
+      }
+      .filter-fields input {
+        min-width: 0;
+        width: 100%;
+      }
+
       .toolbar .back {
         padding-bottom: 0.625rem;
       }
@@ -474,6 +494,18 @@
 
       .table-wrap {
         margin: 0 -0.5rem;
+      }
+
+      .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+      }
+
+      .pagination a {
+        text-decoration: none;
       }
 
       table {
@@ -1191,14 +1223,14 @@
         {{- else }}
         <section class="card toolbar animate-fade-in">
           <form class="search" action="{{ .BaseURL }}stats/" method="get" role="search">
-            <label for="id" data-i18n="stats.search">Find a test by its ID</label>
+            <label for="id" data-i18n="stats.search">Find a test by its ID or IP address</label>
             <div class="search-row">
               <input type="text" id="id" name="id" value="{{ .Query }}" placeholder="Test ID" data-i18n-attr="placeholder:stats.idPlaceholder" autocomplete="off" autocapitalize="off" spellcheck="false" required />
               <button type="submit" class="btn btn-primary" data-i18n="stats.find">Find</button>
             </div>
           </form>
-          {{- if .Query }}
-          <a class="back" href="{{ .BaseURL }}stats/">
+          {{- if or .Query .Filtered }}
+          <a class="back" href="{{ if .Query }}{{ .ListURL }}{{ else }}{{ .BaseURL }}stats/{{ end }}">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="m12 19-7-7 7-7"></path>
               <path d="M19 12H5"></path>
@@ -1206,6 +1238,18 @@
             <span data-i18n="stats.allTests">All tests</span>
           </a>
           {{- end }}
+          <details class="filters" {{ if .Filtered }}open{{ end }}>
+            <summary data-i18n="stats.filters">Filter tests</summary>
+            <form class="filter-fields" action="{{ .BaseURL }}stats/" method="get">
+              <label><span data-i18n="stats.ip">IP address</span><input name="ip" value="{{ .Filters.Get "ip" }}" /></label>
+              <label><span data-i18n="stats.filterDate">Date</span><input type="date" name="date" value="{{ .Filters.Get "date" }}" /></label>
+              <label><span data-i18n="stats.filterDownload">Minimum download, Mbps</span><input type="number" min="0" step="any" name="download" value="{{ .Filters.Get "download" }}" /></label>
+              <label><span data-i18n="stats.filterUpload">Minimum upload, Mbps</span><input type="number" min="0" step="any" name="upload" value="{{ .Filters.Get "upload" }}" /></label>
+              <label><span data-i18n="stats.filterLatency">Minimum idle latency, ms</span><input type="number" min="0" step="any" name="latency" value="{{ .Filters.Get "latency" }}" /></label>
+              <label><span data-i18n="stats.filterJitter">Minimum jitter, ms</span><input type="number" min="0" step="any" name="jitter" value="{{ .Filters.Get "jitter" }}" /></label>
+              <button class="btn btn-primary" type="submit" data-i18n="stats.find">Find</button>
+            </form>
+          </details>
         </section>
 
         {{- if .Deleted }}
@@ -1232,7 +1276,9 @@
         </div>
         {{- end }}
 
-        {{- if .NotFound }}
+        {{- if .InvalidFilter }}
+        <div class="verdict bad" role="alert" data-i18n="stats.invalidFilter">Check the filter values and try again.</div>
+        {{- else if .NotFound }}
         <div class="verdict bad" role="alert">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="10"></circle>
@@ -1266,7 +1312,7 @@
             </div>
             <div class="card-actions">
               <p class="test-id">{{ .UUID }}</p>
-              <form action="{{ $.BaseURL }}stats/" method="post" data-confirm-title="Delete this test?" data-confirm="This cannot be undone." data-i18n-attr="data-confirm-title:stats.confirmDelete;data-confirm:stats.confirmUndone">
+              <form action="{{ $.ListURL }}" method="post" data-confirm-title="Delete this test?" data-confirm="This cannot be undone." data-i18n-attr="data-confirm-title:stats.confirmDelete;data-confirm:stats.confirmUndone">
                 <input type="hidden" name="op" value="delete" />
                 <input type="hidden" name="id" value="{{ .UUID }}" />
                 <button type="submit" class="btn btn-danger btn-small">
@@ -1479,11 +1525,11 @@
           <div class="card-head">
             <div>
               <h2 class="card-title" id="list-title" data-i18n="stats.latest">Latest tests</h2>
-              <p class="card-note" data-i18n="stats.latestNote">Up to 100, newest first. Open a test to see all its details.</p>
+              <p class="card-note" data-i18n="stats.latestNote">Newest first. Open a test for details.</p>
             </div>
             {{- if .Data }}
             <div class="card-actions">
-              <form id="delete-selected" action="{{ .BaseURL }}stats/" method="post" data-confirm-title="Delete the selected tests?" data-confirm="This cannot be undone." data-i18n-attr="data-confirm-title:stats.confirmDeleteSelected;data-confirm:stats.confirmUndone">
+              <form id="delete-selected" action="{{ .ListURL }}" method="post" data-confirm-title="Delete the selected tests?" data-confirm="This cannot be undone." data-i18n-attr="data-confirm-title:stats.confirmDeleteSelected;data-confirm:stats.confirmUndone">
                 <input type="hidden" name="op" value="delete" />
                 <button type="submit" class="btn btn-danger btn-small">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1533,8 +1579,8 @@
                 {{- range .Data }}
                 <tr>
                   <td class="select"><input type="checkbox" name="id" value="{{ .UUID }}" form="delete-selected" aria-label="Select this test" data-i18n-attr="aria-label:stats.select" /></td>
-                  <td class="time"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}"><time datetime="{{ .Time }}" title="{{ .TimeFull }}">{{ .TimeText }}</time></a></td>
-                  <td class="id"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}">{{ .UUID }}</a></td>
+                  <td class="time"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}{{ $.DetailQuery }}"><time datetime="{{ .Time }}" title="{{ .TimeFull }}">{{ .TimeText }}</time></a></td>
+                  <td class="id"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}{{ $.DetailQuery }}">{{ .UUID }}</a></td>
                   <td class="num" data-label="Download, Mbps" data-i18n-attr="data-label:stats.col.download"><span data-num="{{ .DownloadText }}">{{ .DownloadText }}</span></td>
                   <td class="num" data-label="Upload, Mbps" data-i18n-attr="data-label:stats.col.upload"><span data-num="{{ .UploadText }}">{{ .UploadText }}</span></td>
                   <td class="num" data-label="Idle latency, ms" data-i18n-attr="data-label:stats.col.ping"><span data-num="{{ .PingText }}">{{ .PingText }}</span></td>
@@ -1547,7 +1593,22 @@
             </table>
           </div>
           {{- else }}
+          {{- if .Filtered }}
+          <p class="empty" data-i18n="stats.noMatches">No tests match these filters.</p>
+          {{- else }}
           <p class="empty" data-i18n="stats.empty">No tests have been recorded yet.</p>
+          {{- end }}
+          {{- end }}
+          {{- if or .PreviousURL .NextURL }}
+          <nav class="pagination" aria-label="Result pages" data-i18n-attr="aria-label:stats.pages">
+            {{- if .PreviousURL }}
+            <a class="btn btn-secondary btn-small" rel="prev" href="{{ .PreviousURL }}" data-i18n="stats.newer">Newer tests</a>
+            {{- end }}
+            <span class="card-note" aria-current="page"><span data-i18n="stats.page">Page</span> <span data-num="{{ .Page }}">{{ .Page }}</span></span>
+            {{- if .NextURL }}
+            <a class="btn btn-secondary btn-small" rel="next" href="{{ .NextURL }}" data-i18n="stats.older">Older tests</a>
+            {{- end }}
+          </nav>
           {{- end }}
         </section>
         {{- end }}

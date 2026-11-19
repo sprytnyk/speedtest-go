@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"math"
+	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -25,19 +28,29 @@ import (
 	"github.com/librespeed/speedtest-go/database/schema"
 )
 
+const statsPageSize = 100
+
 // StatsData is what the stats page template renders.
 type StatsData struct {
-	BaseURL     string // ends with a slash, for links that work from /stats/ and /backend/stats/ alike
-	Version     string // the running speedtest-go version, as the footer shows it
-	ReleaseURL  string // the running release's page, empty for a build that is not a release
-	Disabled    bool   // database_type is none
-	NoPassword  bool   // statistics_password is not set
-	LoggedIn    bool
-	LoginFailed bool
-	Query       string // the test ID searched for
-	Single      bool   // a single test is shown in full rather than the list
-	NotFound    bool
-	LoadFailed  bool
+	BaseURL       string // ends with a slash, for links that work from /stats/ and /backend/stats/ alike
+	Version       string // the running speedtest-go version, as the footer shows it
+	ReleaseURL    string // the running release's page, empty for a build that is not a release
+	Disabled      bool   // database_type is none
+	NoPassword    bool   // statistics_password is not set
+	LoggedIn      bool
+	LoginFailed   bool
+	Query         string // the test ID searched for
+	Single        bool   // a single test is shown in full rather than the list
+	NotFound      bool
+	LoadFailed    bool
+	Page          int
+	ListURL       string
+	PreviousURL   string
+	NextURL       string
+	Filters       url.Values
+	Filtered      bool
+	InvalidFilter bool
+	DetailQuery   string
 	// Deleted is the number of tests just deleted, for the notice shown
 	// after a delete; empty when nothing was
 	Deleted      string
@@ -172,6 +185,40 @@ func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, d
 	data.LoggedIn = true
 	status = http.StatusOK
 	id := strings.TrimSpace(r.FormValue("id"))
+	query := r.URL.Query()
+	filters := url.Values{}
+	for _, name := range []string{"ip", "date", "download", "upload", "latency", "jitter"} {
+		if value := strings.TrimSpace(query.Get(name)); value != "" {
+			filters.Set(name, value)
+		}
+	}
+	if net.ParseIP(id) != nil {
+		filters.Set("ip", id)
+		id = ""
+	}
+	data.Filters = filters
+	data.Filtered = len(filters) > 0
+	data.InvalidFilter = !validStatsFilters(filters)
+	listURL := statsURL
+	if len(filters) > 0 {
+		listURL += "?" + filters.Encode()
+	}
+	page, err := strconv.Atoi(query.Get("page"))
+	if err != nil || page < 1 || page > 1+math.MaxInt/statsPageSize {
+		page = 1
+	}
+	data.Page = page
+	data.ListURL = statsPageURL(listURL, page)
+	detailValues := url.Values{}
+	for key, values := range filters {
+		detailValues[key] = values
+	}
+	if page > 1 {
+		detailValues.Set("page", strconv.Itoa(page))
+	}
+	if encoded := detailValues.Encode(); encoded != "" {
+		data.DetailQuery = "&" + encoded
+	}
 
 	if op == "delete" || op == "deleteall" {
 		if r.Method != http.MethodPost {
@@ -190,14 +237,61 @@ func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, d
 				log.Errorf("Error saving stats session: %s", err)
 			}
 			// 303 so that reloading the page does not post the delete again
-			http.Redirect(w, r, statsURL, http.StatusSeeOther)
+			redirect := data.ListURL
+			if op == "deleteall" {
+				redirect = statsURL
+			}
+			http.Redirect(w, r, redirect, http.StatusSeeOther)
 			return 0, true
 		}
 		log.Errorf("Error deleting data from database: %s", err)
 		data.DeleteFailed = true
 		status = http.StatusInternalServerError
 		id = "" // show the list again
-	} else if flashes := session.Flashes(); len(flashes) > 0 {
+	}
+
+	if id == "" || id == "L100" {
+		var stats []schema.TelemetryData
+		var err error
+		if !data.InvalidFilter {
+			stats, err = searchStats(filters, (page-1)*statsPageSize, statsPageSize+1)
+		}
+		if err != nil {
+			log.Errorf("Error fetching data from database: %s", err)
+			data.LoadFailed = true
+			return http.StatusInternalServerError, false
+		}
+		if page > 1 {
+			if len(stats) == 0 && !data.DeleteFailed && !data.InvalidFilter {
+				http.Redirect(w, r, listURL, http.StatusSeeOther)
+				return 0, true
+			}
+			data.PreviousURL = statsPageURL(listURL, page-1)
+		}
+		if len(stats) > statsPageSize {
+			data.NextURL = statsPageURL(listURL, page+1)
+			stats = stats[:statsPageSize]
+		}
+		for _, stat := range stats {
+			data.Data = append(data.Data, newStatsEntry(stat))
+		}
+	} else {
+		data.Query = id
+		stat, err := database.DB.FetchByUUID(id)
+		if err != nil {
+			log.Errorf("Error fetching data from database: %s", err)
+			data.NotFound = true
+			status = http.StatusNotFound
+		} else {
+			data.Single = true
+			data.Data = append(data.Data, newStatsEntry(*stat))
+		}
+	}
+
+	if data.DeleteFailed {
+		return status, false
+	}
+	if flashes := session.Flashes(); len(flashes) > 0 {
 		if deleted, ok := flashes[0].(int64); ok {
 			data.Deleted = strconv.FormatInt(deleted, 10)
 		}
@@ -205,30 +299,100 @@ func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, d
 			log.Errorf("Error saving stats session: %s", err)
 		}
 	}
+	return status, false
+}
 
-	if id == "" || id == "L100" {
-		stats, err := database.DB.FetchLast100()
+func validStatsFilters(filters url.Values) bool {
+	for _, name := range []string{"download", "upload", "latency", "jitter"} {
+		value := filters.Get(name)
+		if value == "" {
+			continue
+		}
+		n, err := strconv.ParseFloat(value, 64)
+		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || n < 0 {
+			return false
+		}
+	}
+	if date := filters.Get("date"); date != "" {
+		_, err := time.Parse(time.DateOnly, date)
+		return err == nil
+	}
+	return true
+}
+
+func statsPageURL(listURL string, page int) string {
+	if page == 1 {
+		return listURL
+	}
+	separator := "?"
+	if strings.Contains(listURL, "?") {
+		separator = "&"
+	}
+	return listURL + separator + "page=" + strconv.Itoa(page)
+}
+
+// searchStats reads bounded batches so filters also find results on older pages.
+func searchStats(filters url.Values, offset, limit int) ([]schema.TelemetryData, error) {
+	if len(filters) == 0 {
+		return database.DB.FetchPage(offset, limit)
+	}
+	const batchSize = 500
+	var matches []schema.TelemetryData
+	for start := 0; ; start += batchSize {
+		records, err := database.DB.FetchPage(start, batchSize)
 		if err != nil {
-			log.Errorf("Error fetching data from database: %s", err)
-			data.LoadFailed = true
-			return http.StatusInternalServerError, false
+			return nil, err
 		}
-		for _, stat := range stats {
-			data.Data = append(data.Data, newStatsEntry(stat))
+		for _, record := range records {
+			if !matchesStats(record, filters) {
+				continue
+			}
+			if offset > 0 {
+				offset--
+				continue
+			}
+			matches = append(matches, record)
+			if len(matches) == limit {
+				return matches, nil
+			}
 		}
-		return status, false
+		if len(records) < batchSize {
+			return matches, nil
+		}
 	}
+}
 
-	data.Query = id
-	stat, err := database.DB.FetchByUUID(id)
-	if err != nil {
-		log.Errorf("Error fetching data from database: %s", err)
-		data.NotFound = true
-		return http.StatusNotFound, false
+func matchesStats(record schema.TelemetryData, filters url.Values) bool {
+	if ip := strings.ToLower(filters.Get("ip")); ip != "" {
+		var info Result
+		_ = json.Unmarshal([]byte(record.ISPInfo), &info)
+		reportedIP, _, _ := strings.Cut(info.ProcessedString, " - ")
+		if !strings.Contains(strings.ToLower(record.IPAddress), ip) &&
+			!strings.Contains(strings.ToLower(info.RawISPInfo.IP), ip) &&
+			!strings.Contains(strings.ToLower(reportedIP), ip) {
+			return false
+		}
 	}
-	data.Single = true
-	data.Data = append(data.Data, newStatsEntry(*stat))
-	return http.StatusOK, false
+	if date := filters.Get("date"); date != "" && record.Timestamp.Format(time.DateOnly) != date {
+		return false
+	}
+	latency := record.Ping
+	if measured, ok := parseLatency(record.Extra); ok && measured.Idle.has() {
+		latency = strconv.FormatFloat(*measured.Idle.Avg, 'f', -1, 64)
+	}
+	for _, field := range []struct{ name, value string }{
+		{"download", record.Download}, {"upload", record.Upload},
+		{"latency", latency}, {"jitter", record.Jitter},
+	} {
+		if target := filters.Get(field.name); target != "" {
+			value, err := strconv.ParseFloat(field.value, 64)
+			want, _ := strconv.ParseFloat(target, 64)
+			if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < want {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // deleteStats deletes every stored test for deleteall, or the tests with the

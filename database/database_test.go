@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -23,9 +24,9 @@ func TestDelete(t *testing.T) {
 			db := open(t.TempDir())
 			uuids := func() []string {
 				t.Helper()
-				records, err := db.FetchLast100()
+				records, err := db.FetchPage(0, 100)
 				if err != nil {
-					t.Fatalf("FetchLast100: %s", err)
+					t.Fatalf("FetchPage: %s", err)
 				}
 				var got []string
 				for _, r := range records {
@@ -68,6 +69,40 @@ func TestDelete(t *testing.T) {
 			}
 			if got := uuids(); !reflect.DeepEqual(got, []string{"01D"}) {
 				t.Fatalf("after a new insert: %v", got)
+			}
+		})
+	}
+}
+
+func TestFetchPage(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		open     func(dir string) DataAccess
+		retained int
+	}{
+		{"memory", func(string) DataAccess { return memory.Open("") }, 100},
+		{"bolt", func(dir string) DataAccess { return bolt.Open(filepath.Join(dir, "speedtest.db")) }, 103},
+		{"sqlite", func(dir string) DataAccess { return sqlite.Open(filepath.Join(dir, "speedtest.sqlite")) }, 103},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := tc.open(t.TempDir())
+			testID := func(i int) string { return fmt.Sprintf("%026d", i) }
+			for i := 1; i <= 103; i++ {
+				if err := db.Insert(&schema.TelemetryData{UUID: testID(i)}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, page := range []struct{ offset, limit int }{{0, 100}, {100, 100}, {0, 3}, {2, 4}, {103, 100}} {
+				rows, err := db.FetchPage(page.offset, page.limit)
+				wantLen := min(page.limit, max(0, tc.retained-page.offset))
+				if err != nil || len(rows) != wantLen {
+					t.Fatalf("FetchPage(%d, %d) returned %d rows, want %d: %v", page.offset, page.limit, len(rows), wantLen, err)
+				}
+				for i, row := range rows {
+					if want := testID(103 - page.offset - i); row.UUID != want {
+						t.Fatalf("offset %d, row %d: ID %s, want %s", page.offset, i, row.UUID, want)
+					}
+				}
 			}
 		})
 	}
