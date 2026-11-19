@@ -2,9 +2,9 @@
 
 This page tracks which changes we took from [librespeed/speedtest-go](https://github.com/librespeed/speedtest-go).
 
-## Reviewed through `654df71`
+## Reviewed through `56ca7c4`
 
-These are the six upstream commits after the shared base, `59cff12`.
+These are the seven upstream commits after the shared base, `59cff12`.
 
 | Upstream commit | What we did |
 | --- | --- |
@@ -14,4 +14,5 @@ These are the six upstream commits after the shared base, `59cff12`.
 | [`f6dc876` · MySQL connection format](https://github.com/librespeed/speedtest-go/commit/f6dc876f1896e92f481616e6338200ffee0626a6) | Already documented in the README and settings. |
 | [`84e771d` · Manual GitHub releases](https://github.com/librespeed/speedtest-go/commit/84e771dc7775d55428ba6859b56bd2af69cc2642) | Skipped. The fork already builds release archives from tags and on demand. |
 | [`654df71` · Stability page](https://github.com/librespeed/speedtest-go/commit/654df712c6f7ad6902cb2fe86df9c287b7409fdc) | Took the shutdown fix and kept the fork's final sample. The upstream worker matches the fork's October 10 version. |
+| [`56ca7c4` · Docker assets and server list](https://github.com/librespeed/speedtest-go/commit/56ca7c49d428363640ed9a7e015e087f50f6ecb9) | Took the web UI copy in the image and documented how to mount a server list. Skipped the example list of third-party servers and the README changes. |
 
