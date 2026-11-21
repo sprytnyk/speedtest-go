@@ -39,10 +39,9 @@ const CHART_COLORS = {
   upload: "#f59e0b",
   uploadFill: "rgba(245, 158, 11, 0.2)",
   uploadFillEnd: "rgba(245, 158, 11, 0)",
-  grid: "#334155",
+  grid: "rgba(148, 163, 184, 0.14)",
   text: "#94a3b8",
   reference: "#94a3b8",
-  surface: "#1e293b",
 };
 const MIN_CHART_SECONDS = 35; // roughly one full run with the default settings
 const CHART_PADDING = { right: 8, top: 16, bottom: 26 };
@@ -776,13 +775,17 @@ function drawChart() {
   ctx.moveTo(Math.round(nx) + 0.5, padT);
   ctx.lineTo(Math.round(nx) + 0.5, baseY);
   ctx.stroke();
+  // a 2px ring cut out of the chart around the dot shows the card behind the canvas
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
   ctx.beginPath();
-  ctx.arc(nx, ny, 4, 0, Math.PI * 2);
+  ctx.arc(nx, ny, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(nx, ny, 3, 0, Math.PI * 2);
   ctx.fillStyle = nearest.kind === "dl" ? CHART_COLORS.download : CHART_COLORS.upload;
   ctx.fill();
-  ctx.strokeStyle = CHART_COLORS.surface;
-  ctx.lineWidth = 2;
-  ctx.stroke();
 
   $("tooltip-label").textContent = formatTime(nearest.t) + " " + I18N.t(nearest.kind === "dl" ? "index.download" : "index.upload");
   $("tooltip-value").textContent = formatNumber(nearest.v) + " " + I18N.t("unit.mbps");
