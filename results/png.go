@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
@@ -75,6 +76,11 @@ var imageTexts = map[string]imageText{
 }
 
 var titleFace, subtitleFace, labelFace, valueFace, smallValueFace, unitFace, footFace font.Face
+
+// fontMu lets one image at a time use the faces above. A truetype face keeps a glyph cache
+// that isn't safe for concurrent use: two images rendered at once could panic or leave
+// broken glyphs in the cache for every image after them.
+var fontMu sync.Mutex
 
 func initFonts() {
 	// Noto Sans instead of OpenSans, due to https://github.com/golang/freetype/issues/8
@@ -164,6 +170,8 @@ func formatImageValue(raw, decimal string) string {
 }
 
 func renderResult(record *schema.TelemetryData, isp string, text imageText) *image.RGBA {
+	fontMu.Lock()
+	defer fontMu.Unlock()
 	img := image.NewRGBA(image.Rect(0, 0, canvasWidth*imageScale, canvasHeight*imageScale))
 
 	// the card, with rounded corners left transparent

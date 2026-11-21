@@ -1,7 +1,9 @@
 package results
 
 import (
+	"bytes"
 	"image"
+	"sync"
 	"testing"
 	"time"
 
@@ -100,6 +102,30 @@ func TestRenderResult(t *testing.T) {
 			}
 		}
 	}
+}
+
+// images rendered at the same time share the font faces, and must come out the same
+// as one rendered alone; run with -race to catch unguarded use of the faces
+func TestRenderResultConcurrent(t *testing.T) {
+	initFonts()
+	record := &schema.TelemetryData{
+		Timestamp: time.Date(2026, 10, 15, 22, 9, 45, 0, time.UTC),
+		Download:  "468.32",
+		Upload:    "94.71",
+		Extra:     `{"latency":{"idle":{"avg":13.1,"jitter":1.86},"download":{"avg":48.27,"jitter":6.1},"upload":{"avg":31.5,"jitter":2}}}`,
+	}
+	const isp = "Example Fiber, Ukraine"
+	want := renderResult(record, isp, imageTexts["en"]).Pix
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			if got := renderResult(record, isp, imageTexts["en"]).Pix; !bytes.Equal(got, want) {
+				t.Error("an image rendered alongside others differs from one rendered alone")
+			}
+		})
+	}
+	wg.Wait()
 }
 
 // the big tiles' latency and jitter rows sit right of the speed, and their labels
