@@ -8,7 +8,7 @@
 No Flash, No Java, No WebSocket, No Bullshit.
 
 A self-hosted speed test in a single Go binary. The browser measures download, upload, ping and jitter with
-XMLHttpRequest and Web Workers, and the web UI is built into the binary, so there is nothing else to install.
+XMLHttpRequest and Web Workers, and the binary includes the web UI, so there is nothing else to install.
 
 This is a fork of [librespeed/speedtest-go](https://github.com/librespeed/speedtest-go).
 The [upstream notes](docs/upstream.md) list the commits we've reviewed and what we took from them.
@@ -33,15 +33,16 @@ The [upstream notes](docs/upstream.md) list the commits we've reviewed and what 
 * Jitter as the average change between consecutive pings, shown with the smallest and largest change
 * IP address, ISP and country of the client
 * Connection stability test at `/stability/`, with latency over time, jitter, the p50 and p95 of both, failed
-  requests, an alert threshold and CSV export. It runs idle, while downloading, while uploading, or all three in turn,
-  and shows the latency of each phase, leaving out the pings while a transfer warms up. The result compares the middle
-  ping and the p95 under each load with idle. Add `?load=download`, `?load=upload` or `?load=all` to the address to
-  open it with that load picked.
+  requests, an alert threshold and CSV export. It runs idle, while downloading, while uploading, or all three in turn.
+  It shows the latency of each phase and leaves out the pings while a transfer warms up. The result compares the
+  middle ping and the p95 under each load with idle. Add `?load=download`, `?load=upload` or `?load=all` to the
+  address to open it with that load picked.
   [How the stability test works](docs/stability.md) shows its timers, workers and warm-ups in diagrams
 * Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
 * Multiple test servers to choose from
 * English and Ukrainian, picked from the browser's language or a switch on every page
-* The running version next to the source code link on every page, linked to its release page. `/version` returns it as JSON
+* The running version next to the source code link on every page, linked to its release page. `/version` returns it
+  as JSON
 * Layouts for desktop and phone
 * Optional IP redaction for stored results
 * Supports the [PROXY protocol](https://www.haproxy.org/download/2.3/doc/proxy-protocol.txt)
@@ -70,8 +71,11 @@ Container Registry, tagged with the version, such as `v3.1.0`, and with `latest`
 docker run -d -p 8989:8989 ghcr.io/sprytnyk/speedtest-go:latest
 ```
 
-The image contains the repository's `settings.toml`, which keeps results in memory. To change settings, mount your
-own file over `/app/settings.toml`, or use environment variables:
+> [!NOTE]
+> The image contains the repository's `settings.toml`, which keeps results in memory. They're gone when the
+> container restarts. To keep them, use SQLite on a volume, as below.
+
+To change settings, mount your own file over `/app/settings.toml`, or use environment variables:
 
 ```
 docker run -d -p 8989:8989 -e SPEEDTEST_DATABASE_TYPE=sqlite -e SPEEDTEST_DATABASE_FILE=/data/speedtest.db \
@@ -88,12 +92,13 @@ docker run -d -p 8989:8989 -e SPEEDTEST_ASSETS_PATH=/app/assets \
 
 ### systemd
 
-[`systemd/`](systemd/) has a hardened unit with socket activation and setup steps. Two things to know:
+[`systemd/`](systemd/) has a hardened unit with socket activation and setup steps.
 
-* `MemoryDenyWriteExecute=true` works with the release binaries, but not with binaries packed with UPX, which unpack
-  themselves into executable memory.
-* With `DynamicUser=true`, a SQLite or BoltDB file needs a writable place that survives restarts. Add
-  `StateDirectory=speedtest` to the unit and set `database_file="/var/lib/speedtest/speedtest.db"`.
+> [!IMPORTANT]
+> * `MemoryDenyWriteExecute=true` works with the release binaries, but not with binaries packed with UPX, which
+>   unpack themselves into executable memory.
+> * With `DynamicUser=true`, a SQLite or BoltDB file needs a writable place that survives restarts. Add
+>   `StateDirectory=speedtest` to the unit and set `database_file="/var/lib/speedtest/speedtest.db"`.
 
 ### From source
 
@@ -109,9 +114,9 @@ The binary embeds the web UI from `web/assets`, so you only copy `speedtest-back
 server.
 
 `scripts/build-release.sh` builds the release archives and their `SHA256SUMS` for every platform into `dist/`. The
-*Release builds* workflow runs it for every version tag, and from the Actions tab for any branch, and keeps the
-archives as a downloadable artifact of the run. The builds are reproducible, so the same commit gives the same
-checksums on any machine with the same Go toolchain.
+*Release builds* workflow runs it for every version tag, and you can start it from the Actions tab for any branch. It
+keeps the archives as a downloadable artifact of the run. The builds are reproducible, so the same commit gives the
+same checksums on any machine with the same Go toolchain.
 
 ## Configuration
 
@@ -170,7 +175,7 @@ to 350 ms instead of 44 ms.
 
 Over HTTP/1.1 the page downloads with 4 connections and leaves one of the browser's 6 per server for the pings. The
 server only speaks HTTP/1.1, so this matters behind a reverse proxy. In Caddy, set the protocols in the global
-options. The setting applies to every site on the same port:
+options:
 
 ```
 {
@@ -179,6 +184,9 @@ options. The setting applies to every site on the same port:
 	}
 }
 ```
+
+> [!WARNING]
+> Caddy uses this setting for every site on the same port.
 
 HTTP/3 doesn't use one TCP connection either, but the results depended on the browser. Firefox downloaded at 91 to
 105 Mbps, but its pings under load showed 1,050 to 1,300 ms. Brave reached 87 to 95 Mbps when forced onto HTTP/3,
@@ -198,13 +206,16 @@ modprobe tcp_bbr
 sysctl -p /etc/sysctl.d/60-bbr.conf
 ```
 
-The change applies to new connections. With BBR the latency under load rose from about 60 ms to between 120 and
-150 ms, because the test now fills the line and the line's queue fills with it.
+The change applies to new connections.
+
+> [!NOTE]
+> With BBR the latency under load rose from about 60 ms to between 120 and 150 ms, because the test now fills the
+> line and the line's queue fills with it.
 
 ### Raise the TCP buffers for fast, distant users
 
-A connection can only send as much data as its buffer holds before the other side confirms it arrived. Its speed
-is limited to about the buffer size divided by the ping. By default Linux lets each connection use up to 4 MB for
+A connection can only send as much data as its buffer holds before the other side confirms it arrived. Its top
+speed is about the buffer size divided by the ping. By default Linux lets each connection use up to 4 MB for
 sending and 6 MB for receiving, and keeps part of that for itself. 100 Mbps at 45 ms needs about 0.6 MB, but 1 Gbps
 at 100 ms needs about 12.5 MB. On [#872](https://github.com/librespeed/speedtest/issues/872#issuecomment-6362608909),
 a user fixed slow results on a very fast connection by raising the buffers along with BBR. The test uses several
@@ -243,8 +254,9 @@ button with a result image, and the statistics page. To turn it on:
 
     `basic` stores the results only. `full` also stores the test log, which the statistics page shows.
 
-4. Put your contact address into the privacy policy in `index.html` in place of `krlsv@pm.me`. The page shows a note
-   above the start button that links to the policy.
+> [!IMPORTANT]
+> Put your contact address into the privacy policy in `index.html` in place of `krlsv@pm.me`. A note above the
+> start button links to the policy, and visitors send deletion requests to that address.
 
 The server accepts telemetry requests up to 1 MiB. It rejects larger requests before saving a result.
 
@@ -271,8 +283,8 @@ You can then open a stored test at:
 
     A bare value such as `localhost` fails at startup with `default addr for network 'localhost' unknown`.
 
-* The server looks up results by `uuid`, so the schemas index that column. A database made from an older schema
-  needs the index added by hand, except SQLite, which adds it on startup:
+* The server looks up results by `uuid`, so the schemas index that column. SQLite adds the index on startup. In a
+  PostgreSQL, MySQL or MSSQL database made from an older schema, add it by hand:
 
     ```sql
     -- PostgreSQL
@@ -286,11 +298,15 @@ You can then open a stored test at:
 
 ## ISP lookup and privacy
 
-The client's ISP and country come from the API set in `ip_lookup_url`. The `settings.toml` in this repository, and
-so the Docker image, uses [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json). Without the key, there are no
-lookups. The server sends only the client's IP address, with no API key, cookies or other identifiers. It never
-sends private or special addresses, such as CGNAT and IPv6 ULA ranges. It takes the client IP from the connection,
-or from the `X-Forwarded-For`, `X-Real-IP`, `Client-IP` and `CF-Connecting-IPv6` headers when a proxy sets them.
+> [!IMPORTANT]
+> The `settings.toml` in this repository, and so the Docker image, sends each client's IP address to
+> [ip.sprytnyk.dev](https://ip.sprytnyk.dev/openapi.json) to look up their ISP and country. To turn that off, set
+> `ip_lookup_url=""`.
+
+The client's ISP and country come from the API set in `ip_lookup_url`. Without the key, there are no lookups. The
+server sends only the client's IP address, with no API key, cookies or other identifiers. It never sends private or
+special addresses, such as CGNAT and IPv6 ULA ranges. It takes the client IP from the connection, or from the
+`X-Forwarded-For`, `X-Real-IP`, `Client-IP` and `CF-Connecting-IPv6` headers when a proxy sets them.
 
 * To use another API, point `ip_lookup_url` at it. The server replaces `{ip}` in the URL with the client's IP, and
   the response must be JSON with `ip`, `city`, `country`, `iso_code` and `org` fields.
