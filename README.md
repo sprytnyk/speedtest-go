@@ -5,6 +5,8 @@
 
 # LibreSpeed
 
+![AI Generated](https://img.shields.io/badge/AI-generated-orange)
+
 No Flash, No Java, No WebSocket, No Bullshit.
 
 A self-hosted speed test in a single Go binary. The browser measures download, upload, ping and jitter with
