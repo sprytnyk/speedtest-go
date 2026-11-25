@@ -76,6 +76,17 @@ func newRouter(conf *config.Config) *chi.Mux {
 		assetFS = http.FS(sub)
 	} else {
 		assetFS = justFilesFilesystem{fs: http.Dir(conf.AssetsPath), readDirBatchSize: 2}
+		// Older custom asset folders can lack theme files the Statistics page needs.
+		for _, name := range []string{"theme.css", "javascript/theme.js"} {
+			path := "/" + name
+			if file, err := assetFS.Open(path); err == nil {
+				_ = file.Close()
+			} else if errors.Is(err, fs.ErrNotExist) {
+				r.Get(conf.BaseURL+path, func(w http.ResponseWriter, r *http.Request) {
+					http.ServeFileFS(w, r, defaultAssets, "assets/"+name)
+				})
+			}
+		}
 	}
 
 	r.Get(conf.BaseURL+"/*", pages(assetFS, conf.BaseURL))

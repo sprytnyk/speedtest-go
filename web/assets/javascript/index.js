@@ -30,19 +30,7 @@ const testState = {
   dirty: true, // re-render on the next animation frame
 };
 
-// Chart colors: blue and amber stay distinct for common color vision
-// deficiencies, and download and upload never overlap in time anyway
-const CHART_COLORS = {
-  download: "#3b82f6",
-  downloadFill: "rgba(59, 130, 246, 0.22)",
-  downloadFillEnd: "rgba(59, 130, 246, 0)",
-  upload: "#f59e0b",
-  uploadFill: "rgba(245, 158, 11, 0.2)",
-  uploadFillEnd: "rgba(245, 158, 11, 0)",
-  grid: "rgba(148, 163, 184, 0.14)",
-  text: "#94a3b8",
-  reference: "#94a3b8",
-};
+let chartColors;
 const MIN_CHART_SECONDS = 35; // roughly one full run with the default settings
 const CHART_PADDING = { right: 8, top: 16, bottom: 26 };
 
@@ -59,8 +47,26 @@ const LOCAL_SERVER = {
 
 const $ = (id) => document.getElementById(id);
 
+function updateChartColors() {
+  const style = getComputedStyle(document.documentElement);
+  const color = (name) => style.getPropertyValue(name).trim();
+  const series = (name, opacity) => {
+    const rgb = color(name);
+    return { line: `rgb(${rgb})`, fill: `rgb(${rgb} / ${opacity})`, fillEnd: `rgb(${rgb} / 0)` };
+  };
+  chartColors = {
+    dl: series("--download-rgb", 0.22),
+    ul: series("--upload-rgb", 0.2),
+    grid: color("--chart-grid"),
+    text: color("--text-muted"),
+  };
+  testState.dirty = true;
+}
+
 // Bootstrap the application when the DOM is ready
 window.addEventListener("DOMContentLoaded", () => {
+  updateChartColors();
+  window.addEventListener("speedtest-theme-change", updateChartColors);
   // the translations were just applied, so redo the select's copy of the chosen option
   refreshServerSelect();
   I18N.onChange(() => {
@@ -696,12 +702,12 @@ function drawChart() {
   ctx.textBaseline = "middle";
   for (let v = 0; v <= scale.max + scale.step / 2; v += scale.step) {
     const y = Math.round(yFor(v)) + 0.5;
-    ctx.strokeStyle = CHART_COLORS.grid;
+    ctx.strokeStyle = chartColors.grid;
     ctx.beginPath();
     ctx.moveTo(padL, y);
     ctx.lineTo(padL + plotW, y);
     ctx.stroke();
-    ctx.fillStyle = CHART_COLORS.text;
+    ctx.fillStyle = chartColors.text;
     ctx.fillText(formatAxis(v), padL - 8, y);
   }
 
@@ -733,9 +739,7 @@ function drawChart() {
   for (const kind of ["dl", "ul"]) {
     const points = samples.filter((s) => s.kind === kind);
     if (points.length === 0) continue;
-    const color = kind === "dl" ? CHART_COLORS.download : CHART_COLORS.upload;
-    const fill = kind === "dl" ? CHART_COLORS.downloadFill : CHART_COLORS.uploadFill;
-    const fillEnd = kind === "dl" ? CHART_COLORS.downloadFillEnd : CHART_COLORS.uploadFillEnd;
+    const { line, fill, fillEnd } = chartColors[kind];
 
     const gradient = ctx.createLinearGradient(0, padT, 0, baseY);
     gradient.addColorStop(0, fill);
@@ -750,7 +754,7 @@ function drawChart() {
 
     ctx.beginPath();
     points.forEach((p, i) => (i === 0 ? ctx.moveTo(xFor(p.t), yFor(p.v)) : ctx.lineTo(xFor(p.t), yFor(p.v))));
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = line;
     ctx.lineWidth = 2;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
@@ -769,7 +773,7 @@ function drawChart() {
   }
   const nx = xFor(nearest.t);
   const ny = yFor(nearest.v);
-  ctx.strokeStyle = CHART_COLORS.reference;
+  ctx.strokeStyle = chartColors.text;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(Math.round(nx) + 0.5, padT);
@@ -784,7 +788,7 @@ function drawChart() {
   ctx.restore();
   ctx.beginPath();
   ctx.arc(nx, ny, 3, 0, Math.PI * 2);
-  ctx.fillStyle = nearest.kind === "dl" ? CHART_COLORS.download : CHART_COLORS.upload;
+  ctx.fillStyle = chartColors[nearest.kind].line;
   ctx.fill();
 
   $("tooltip-label").textContent = formatTime(nearest.t) + " " + I18N.t(nearest.kind === "dl" ? "index.download" : "index.upload");

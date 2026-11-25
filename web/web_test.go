@@ -99,6 +99,47 @@ func TestAssetsFallbackOnStatError(t *testing.T) {
 	}
 }
 
+func TestThemeAssets(t *testing.T) {
+	const baseURL = "/speedtest"
+	for _, asset := range []struct {
+		name, contentType, custom string
+	}{
+		{"theme.css", "text/css", ":root { color-scheme: light; }"},
+		{"javascript/theme.js", "javascript", `document.documentElement.dataset.theme = "light";`},
+	} {
+		t.Run(asset.name, func(t *testing.T) {
+			bundled, err := defaultAssets.ReadFile("assets/" + asset.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			customDir := t.TempDir()
+			check := func(assetsPath string, want []byte) {
+				t.Helper()
+				router := newRouter(&config.Config{BaseURL: baseURL, AssetsPath: assetsPath})
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, baseURL+"/"+asset.name, nil))
+				contentType := w.Header().Get("Content-Type")
+				if w.Code != http.StatusOK || !strings.Contains(contentType, asset.contentType) {
+					t.Fatalf("GET %s: status %d, Content-Type %q", asset.name, w.Code, contentType)
+				}
+				if !bytes.Equal(w.Body.Bytes(), want) {
+					t.Errorf("GET %s did not serve the expected asset", asset.name)
+				}
+			}
+			check("", bundled)
+			check(customDir, bundled)
+			customPath := filepath.Join(customDir, asset.name)
+			if err := os.MkdirAll(filepath.Dir(customPath), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(customPath, []byte(asset.custom), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			check(customDir, []byte(asset.custom))
+		})
+	}
+}
+
 func TestVersionInfo(t *testing.T) {
 	defer func(v string) { config.Version = v }(config.Version)
 	versions := []struct{ version, body string }{

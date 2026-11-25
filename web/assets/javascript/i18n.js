@@ -13,6 +13,8 @@
   var STRINGS = {
     en: {
       "lang.label": "Language",
+      "theme.toLight": "Switch to the light theme",
+      "theme.toDark": "Switch to the dark theme",
       "nav.stability": "Stability test",
       "footer.source": "Source code",
       "footer.version": "speedtest-go version",
@@ -255,6 +257,8 @@
 
     uk: {
       "lang.label": "Мова",
+      "theme.toLight": "Увімкнути світлу тему",
+      "theme.toDark": "Увімкнути темну тему",
       "nav.stability": "Тест стабільності",
       "footer.source": "Вихідний код",
       "footer.version": "Версія speedtest-go",

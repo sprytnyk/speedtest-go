@@ -1,0 +1,179 @@
+:root {
+  color-scheme: light;
+  /* Set one variable to initial so var() uses its fallback. Leave the other empty. */
+  --light-palette: initial;
+  --dark-palette: ;
+  --bg: var(--light-palette, #f8fafc) var(--dark-palette, #020617);
+  --glow: var(--light-palette, #2563eb1f) var(--dark-palette, rgba(59, 130, 246, 0.18));
+  --dots: var(--light-palette, #0f172a14) var(--dark-palette, rgba(148, 163, 184, 0.1));
+  --surface: var(--light-palette, #ffffffcc) var(--dark-palette, rgba(15, 23, 42, 0.6));
+  --solid: var(--light-palette, #fff) var(--dark-palette, #0f172a);
+  --header: var(--light-palette, #f8fafcb3) var(--dark-palette, rgba(2, 6, 23, 0.65));
+  --raised: var(--light-palette, #f8fafccc) var(--dark-palette, rgba(30, 41, 59, 0.4));
+  --raised-hover: var(--light-palette, #f1f5f9) var(--dark-palette, rgba(51, 65, 85, 0.5));
+  --inset: var(--light-palette, #fff) var(--dark-palette, rgba(2, 6, 23, 0.6));
+  --border: var(--light-palette, #0f172a14) var(--dark-palette, rgba(148, 163, 184, 0.12));
+  --border-strong: var(--light-palette, #0f172a24) var(--dark-palette, rgba(148, 163, 184, 0.22));
+  --field-border: var(--light-palette, #0f172a1f) var(--dark-palette, rgba(148, 163, 184, 0.18));
+  --field-hover: var(--light-palette, #0f172a40) var(--dark-palette, rgba(148, 163, 184, 0.32));
+  --select-chevron:
+    var(--light-palette, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"))
+    var(--dark-palette, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"));
+  --segment: var(--light-palette, #0f172a0d) var(--dark-palette, rgba(30, 41, 59, 0.6));
+  --segment-on: var(--light-palette, #fff) var(--dark-palette, #334155);
+  --highlight:
+    var(--light-palette, inset 0 1px 0 #ffffffe6)
+    var(--dark-palette, inset 0 1px 0 rgba(255, 255, 255, 0.04));
+  --shadow:
+    var(--light-palette, 0 1px 2px #0f172a0a, 0 12px 32px -16px #0f172a29)
+    var(--dark-palette, 0 12px 40px -16px rgba(0, 0, 0, 0.8));
+  --menu-shadow:
+    var(--light-palette, 0 16px 40px -12px #0f172a29)
+    var(--dark-palette, 0 16px 40px -12px rgba(0, 0, 0, 0.8));
+  --dialog-shadow:
+    var(--light-palette, 0 2px 4px #0f172a0a, 0 32px 64px -24px #0f172a40)
+    var(--dark-palette, 0 32px 64px -16px #000);
+  --backdrop: var(--light-palette, #0f172a52) var(--dark-palette, rgba(2, 6, 23, 0.7));
+  --ring: var(--light-palette, #2563eb40) var(--dark-palette, rgba(96, 165, 250, 0.35));
+  --line: var(--light-palette, #0f172a14) var(--dark-palette, rgba(148, 163, 184, 0.1));
+  --text: var(--light-palette, #1e293b) var(--dark-palette, #cbd5e1);
+  --text-strong: var(--light-palette, #020617) var(--dark-palette, #f8fafc);
+  --text-soft: var(--light-palette, #334155) var(--dark-palette, #cbd5e1);
+  --text-muted: var(--light-palette, #64748b) var(--dark-palette, #94a3b8);
+  --text-subtle: #64748b;
+  --accent: #2563eb;
+  --accent-top: #3b82f6;
+  --accent-end: #1d4ed8;
+  --accent-glow: var(--light-palette, #2563eb73) var(--dark-palette, rgba(59, 130, 246, 0.4));
+  --primary:
+    var(--light-palette, linear-gradient(180deg, var(--accent), var(--accent-end)))
+    var(--dark-palette, linear-gradient(180deg, var(--accent-top), var(--accent)));
+  --link: var(--light-palette, #2563eb) var(--dark-palette, #60a5fa);
+  --link-hover: var(--light-palette, #1d4ed8) var(--dark-palette, #93c5fd);
+  --title-end: var(--light-palette, var(--link)) var(--dark-palette, var(--link-hover));
+  --selection: var(--light-palette, #2563eb2e) var(--dark-palette, rgba(96, 165, 250, 0.25));
+  --stop: var(--light-palette, #be123c) var(--dark-palette, #e11d48);
+  --stop-top: var(--light-palette, #e11d48) var(--dark-palette, #f43f5e);
+  --stop-glow: var(--light-palette, #e11d4840) var(--dark-palette, rgba(244, 63, 94, 0.4));
+  --ok: var(--light-palette, #047857) var(--dark-palette, #34d399);
+  --warn: var(--light-palette, #b45309) var(--dark-palette, #fbbf24);
+  --bad: var(--light-palette, #be123c) var(--dark-palette, #fb7185);
+  --green: var(--light-palette, #059669) var(--dark-palette, var(--ok));
+  --amber: var(--light-palette, #d97706) var(--dark-palette, var(--warn));
+  --purple: var(--light-palette, #7c3aed) var(--dark-palette, #a78bfa);
+  --failed: var(--light-palette, #e11d48) var(--dark-palette, #f43f5e);
+  --chart-grid: var(--light-palette, #0f172a24) var(--dark-palette, rgba(148, 163, 184, 0.14));
+  --chart-warmup: var(--light-palette, #0f172a38) var(--dark-palette, rgba(148, 163, 184, 0.22));
+
+  /* The chart lines, fills and legends share the same colors. */
+  --idle-rgb: var(--light-palette, 100 116 139) var(--dark-palette, 203 213 225);
+  --download-rgb: var(--light-palette, 37 99 235) var(--dark-palette, 59 130 246);
+  --upload-rgb: var(--light-palette, 180 83 9) var(--dark-palette, 245 158 11);
+  --idle: rgb(var(--idle-rgb));
+  --download: rgb(var(--download-rgb));
+  --upload: rgb(var(--upload-rgb));
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --light-palette: ;
+  --dark-palette: initial;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --light-palette: ;
+    --dark-palette: initial;
+  }
+}
+
+.topbar-actions,
+.header-preferences {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-actions {
+  gap: 1rem;
+}
+
+.header-preferences {
+  flex: none;
+  gap: 0.5rem;
+}
+
+.lang-switch {
+  display: inline-flex;
+  gap: 0.125rem;
+  padding: 0.1875rem;
+  background-color: var(--segment);
+  border: 1px solid var(--border);
+  border-radius: 0.6875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.lang-switch button {
+  padding: 0.125rem 0.625rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lang-switch button:hover {
+  color: var(--text-strong);
+}
+
+.lang-switch button[aria-pressed="true"] {
+  background-color: var(--segment-on);
+  color: var(--text-strong);
+  box-shadow: 0 1px 2px #0f172a1f, var(--highlight);
+  cursor: default;
+}
+
+.theme-toggle:not([hidden]) {
+  display: grid;
+  place-items: center;
+  width: 2.125rem;
+  height: 2.125rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.6875rem;
+  background-color: var(--surface);
+  color: var(--text-soft);
+  box-shadow: var(--highlight);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background-color: var(--raised-hover);
+  color: var(--text-strong);
+}
+
+.theme-toggle svg {
+  width: 1.0625rem;
+  height: 1.0625rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.theme-toggle[data-next-theme="dark"] .sun,
+.theme-toggle[data-next-theme="light"] .moon {
+  display: none;
+}
+
+@media (max-width: 400px) {
+  .topbar-actions {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}

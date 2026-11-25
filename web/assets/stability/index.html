@@ -4,58 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Measure latency, jitter and failed requests over time, idle or under load." />
-    <meta name="theme-color" content="#020617" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f8fafc" data-theme-color="light" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#020617" data-theme-color="dark" media="(prefers-color-scheme: dark)" />
+    <script src="../javascript/theme.js"></script>
     <link rel="icon" href="../images/favicon.svg" />
     <title data-i18n="stab.title">LibreSpeed - Stability Test</title>
     <script type="text/javascript" src="../javascript/i18n.js"></script>
     <script type="text/javascript" src="../javascript/version.js" defer></script>
+    <link rel="stylesheet" href="../theme.css" />
     <style>
-      :root {
-        color-scheme: dark;
-        --bg: #020617;
-        --glow: rgba(59, 130, 246, 0.18);
-        --dots: rgba(148, 163, 184, 0.1);
-        /* see-through cards over the glow; menus, tooltips and dialogs stay solid */
-        --surface: rgba(15, 23, 42, 0.6);
-        --solid: #0f172a;
-        --header: rgba(2, 6, 23, 0.65);
-        --raised: rgba(30, 41, 59, 0.4);
-        --raised-hover: rgba(51, 65, 85, 0.5);
-        --inset: rgba(2, 6, 23, 0.6);
-        --border: rgba(148, 163, 184, 0.12);
-        --border-strong: rgba(148, 163, 184, 0.22);
-        --field-border: rgba(148, 163, 184, 0.18);
-        --field-hover: rgba(148, 163, 184, 0.32);
-        --segment: rgba(30, 41, 59, 0.6);
-        --segment-on: #334155;
-        /* thin light line along the top edge of cards and buttons */
-        --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-        --shadow: 0 12px 40px -16px rgba(0, 0, 0, 0.8);
-        --ring: rgba(96, 165, 250, 0.35);
-        --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
-        --text: #cbd5e1;
-        --text-strong: #f8fafc;
-        --text-soft: #cbd5e1;
-        --text-muted: #94a3b8;
-        --accent: #2563eb;
-        --accent-top: #3b82f6;
-        --accent-glow: rgba(59, 130, 246, 0.4);
-        --link: #60a5fa;
-        --link-hover: #93c5fd;
-        --stop: #e11d48;
-        --stop-top: #f43f5e;
-        --stop-glow: rgba(244, 63, 94, 0.4);
-        --ok: #34d399;
-        --warn: #fbbf24;
-        --bad: #fb7185;
-        --series: #3b82f6;
-        --failed: #f43f5e;
-        /* load test phases, download and upload as on the main page */
-        --idle: #cbd5e1;
-        --download: #3b82f6;
-        --upload: #f59e0b;
-      }
-
       *,
       *::before,
       *::after {
@@ -70,7 +28,7 @@
       }
 
       ::selection {
-        background-color: rgba(96, 165, 250, 0.25);
+        background-color: var(--selection);
       }
 
       /* Inter is used only when it's installed on the visitor's computer */
@@ -196,7 +154,7 @@
         width: 2.75rem;
         height: 2.75rem;
         flex-shrink: 0;
-        background: linear-gradient(140deg, var(--accent-top), #1d4ed8);
+        background: linear-gradient(140deg, var(--accent-top), var(--accent-end));
         border-radius: 0.875rem;
         box-shadow:
           0 6px 16px -4px var(--accent-glow),
@@ -216,7 +174,7 @@
         font-weight: 750;
         letter-spacing: -0.03em;
         line-height: 1.2;
-        background: linear-gradient(100deg, var(--text-strong) 35%, #93c5fd);
+        background: linear-gradient(100deg, var(--text-strong) 35%, var(--title-end));
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
@@ -240,57 +198,6 @@
       .back svg {
         width: 1rem;
         height: 1rem;
-      }
-
-      .topbar-actions {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-      }
-
-      .lang-switch {
-        display: inline-flex;
-        gap: 0.125rem;
-        padding: 0.1875rem;
-        background-color: var(--segment);
-        border: 1px solid var(--border);
-        border-radius: 0.6875rem;
-      }
-
-      .lang-switch button {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 2.25rem;
-        height: 1.75rem;
-        border: 0;
-        border-radius: 0.5rem;
-        background: none;
-        cursor: pointer;
-        opacity: 0.5;
-        transition:
-          background-color 0.15s ease,
-          opacity 0.15s ease;
-      }
-
-      .lang-switch button:hover {
-        opacity: 0.85;
-      }
-
-      .lang-switch button[aria-pressed="true"] {
-        background-color: var(--segment-on);
-        box-shadow:
-          0 1px 2px rgba(0, 0, 0, 0.3),
-          var(--highlight);
-        opacity: 1;
-        cursor: default;
-      }
-
-      .lang-switch svg {
-        display: block;
-        width: 1.3125rem;
-        height: 0.875rem;
-        border-radius: 2px;
       }
 
       .card {
@@ -355,7 +262,7 @@
         font: inherit;
         color: var(--text-strong);
         background: var(--inset)
-          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+          var(--select-chevron)
           no-repeat right 0.75rem center / 1rem;
         border: 1px solid var(--field-border);
         border-radius: 0.625rem;
@@ -422,7 +329,7 @@
           border: 1px solid var(--border-strong);
           border-radius: 0.75rem;
           box-shadow:
-            0 16px 40px -12px rgba(0, 0, 0, 0.8),
+            var(--menu-shadow),
             var(--highlight);
           color: var(--text);
         }
@@ -490,7 +397,7 @@
 
       .btn-primary {
         flex: 1;
-        background: linear-gradient(180deg, var(--accent-top), var(--accent));
+        background: var(--primary);
         color: #fff;
         box-shadow:
           0 1px 2px rgba(15, 23, 42, 0.15),
@@ -558,7 +465,7 @@
       .progress-bar {
         height: 100%;
         width: 0;
-        background-color: var(--series);
+        background-color: var(--download);
         border-radius: 9999px;
         transition: width 0.2s linear;
       }
@@ -709,17 +616,17 @@
 
       .stat-icon.blue {
         background-color: rgba(59, 130, 246, 0.2);
-        color: #60a5fa;
+        color: var(--link);
       }
 
       .stat-icon.purple {
         background-color: rgba(139, 92, 246, 0.2);
-        color: #a78bfa;
+        color: var(--purple);
       }
 
       .stat-icon.amber {
         background-color: rgba(245, 158, 11, 0.2);
-        color: #fbbf24;
+        color: var(--amber);
       }
 
       .stat-label {
@@ -890,7 +797,7 @@
         width: 1rem;
         height: 2px;
         border-radius: 1px;
-        background-color: var(--series);
+        background-color: var(--download);
       }
 
       .swatch.dot {
@@ -953,11 +860,11 @@
       }
 
       .phase-label.download {
-        color: #60a5fa;
+        color: var(--link);
       }
 
       .phase-label.upload {
-        color: #fbbf24;
+        color: var(--warn);
       }
 
       .tooltip {
@@ -1011,7 +918,7 @@
       input[type="range"] {
         display: block;
         width: 100%;
-        accent-color: var(--series);
+        accent-color: var(--download);
         cursor: pointer;
       }
 
@@ -1169,7 +1076,7 @@
         }
       }
 
-      /* narrow phones: the back link and language switch get their own line and the main stats become rows, like the info rows on the IP page */
+      /* On narrow phones, put the header controls on their own row and stack the main stats. */
       @media screen and (max-width: 400px) {
         .page {
           --gutter: 0.75rem;
@@ -1240,21 +1147,18 @@
           </svg>
           LibreSpeed
         </a>
-          <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:lang.label">
-            <button type="button" data-lang="en" lang="en" aria-pressed="true" aria-label="English" title="English">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-                <clipPath id="flag-gb-clip"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"></path></clipPath>
-                <path d="M0,0 v30 h60 v-30 z" fill="#012169"></path>
-                <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"></path>
-                <path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#flag-gb-clip)" stroke="#C8102E" stroke-width="4"></path>
-                <path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"></path>
-                <path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"></path>
+          <div class="header-preferences">
+            <div class="lang-switch" role="group" aria-label="Language" data-i18n-attr="aria-label:lang.label">
+              <button type="button" data-lang="en" lang="en" aria-pressed="true" aria-label="English" title="English">EN</button>
+              <button type="button" data-lang="uk" lang="uk" aria-pressed="false" aria-label="Українська" title="Українська">УК</button>
+            </div>
+            <button type="button" class="theme-toggle" hidden>
+              <svg class="sun" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
               </svg>
-            </button>
-            <button type="button" data-lang="uk" lang="uk" aria-pressed="false" aria-label="Українська" title="Українська">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" aria-hidden="true">
-                <rect width="3" height="1" fill="#0057B7"></rect>
-                <rect y="1" width="3" height="1" fill="#FFD700"></rect>
+              <svg class="moon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path>
               </svg>
             </button>
           </div>
@@ -1531,33 +1435,37 @@
       var loadWarming = false; // the running transfer is warming up
       var loadSpeeds = []; // Mbps per phase, as reported by the load worker
 
-      // Chart colors, validated against the card surface for lightness, contrast and color-blind separation
-      var CHART_COLORS = {
-        failed: "#f43f5e",
-        reference: "#94a3b8",
-        grid: "rgba(148, 163, 184, 0.14)",
-        text: "#94a3b8"
-      };
-      // latency line per phase of a load test, with download and upload in the main page's colours;
-      // a test without load draws it all in the download blue
-      var SERIES_COLORS = {
-        idle: { line: "#cbd5e1", fill: "rgba(203, 213, 225, 0.18)", fillEnd: "rgba(203, 213, 225, 0)", band: "rgba(203, 213, 225, 0.06)" },
-        download: {
-          line: "#3b82f6",
-          fill: "rgba(59, 130, 246, 0.28)",
-          fillEnd: "rgba(59, 130, 246, 0)",
-          band: "rgba(59, 130, 246, 0.08)"
-        },
-        upload: {
-          line: "#f59e0b",
-          fill: "rgba(245, 158, 11, 0.26)",
-          fillEnd: "rgba(245, 158, 11, 0)",
-          band: "rgba(245, 158, 11, 0.08)"
-        }
-      };
+      var chartColors;
+
+      function updateChartColors() {
+        var style = getComputedStyle(document.documentElement);
+        var color = (name) => style.getPropertyValue(name).trim();
+        var series = (name, fill, band) => {
+          var rgb = color(name);
+          return {
+            line: `rgb(${rgb})`,
+            fill: `rgb(${rgb} / ${fill})`,
+            fillEnd: `rgb(${rgb} / 0)`,
+            band: `rgb(${rgb} / ${band})`,
+          };
+        };
+        chartColors = {
+          failed: color("--failed"),
+          grid: color("--chart-grid"),
+          text: color("--text-muted"),
+          warmup: color("--chart-warmup"),
+          series: {
+            idle: series("--idle-rgb", 0.18, 0.06),
+            download: series("--download-rgb", 0.28, 0.08),
+            upload: series("--upload-rgb", 0.26, 0.08),
+          },
+        };
+        warmupTile = null;
+        dirty = true;
+      }
 
       function seriesStyle(point) {
-        return SERIES_COLORS[loadTest ? PHASES[point.phase] : "download"];
+        return chartColors.series[loadTest ? PHASES[point.phase] : "download"];
       }
       var DEFAULT_CHART_SECONDS = 60; // the chart's span before a test
       var CHART_PADDING = { left: 40, right: 8, top: 16, bottom: 26 };
@@ -2217,7 +2125,7 @@
           warmupTile = document.createElement("canvas");
           warmupTile.width = warmupTile.height = 8;
           var g = warmupTile.getContext("2d");
-          g.strokeStyle = "rgba(148, 163, 184, 0.22)";
+          g.strokeStyle = chartColors.warmup;
           g.lineWidth = 1.5;
           g.beginPath();
           g.moveTo(-2, 2);
@@ -2288,11 +2196,11 @@
             // the running phase may label into the empty space ahead of it, so its name shows from the start
             var labelEnd = i < data.length ? bx1 : padL + plotW;
             if (labelEnd > bx0) {
-              var bandStyle = SERIES_COLORS[PHASES[data[runStart].phase]];
+              var bandStyle = chartColors.series[PHASES[data[runStart].phase]];
               ctx.fillStyle = bandStyle.band;
               ctx.fillRect(bx0, padT, bx1 - bx0, plotH);
               if (runStart > 0 && bandX >= padL) {
-                ctx.strokeStyle = CHART_COLORS.grid;
+                ctx.strokeStyle = chartColors.grid;
                 ctx.beginPath();
                 ctx.moveTo(Math.round(bandX) + 0.5, padT);
                 ctx.lineTo(Math.round(bandX) + 0.5, baseY);
@@ -2332,12 +2240,12 @@
         for (var s = 0; s < ySteps.length; s++) {
           if (ySteps[s] > yMax) continue;
           var y = Math.round(yFor(ySteps[s])) + 0.5;
-          ctx.strokeStyle = CHART_COLORS.grid;
+          ctx.strokeStyle = chartColors.grid;
           ctx.beginPath();
           ctx.moveTo(padL, y);
           ctx.lineTo(padL + plotW, y);
           ctx.stroke();
-          ctx.fillStyle = CHART_COLORS.text;
+          ctx.fillStyle = chartColors.text;
           ctx.fillText(String(ySteps[s]), padL - 8, y);
         }
 
@@ -2366,14 +2274,14 @@
           var threshY = Math.round(yFor(alertThresholdMs)) + 0.5;
           ctx.save();
           ctx.setLineDash([6, 4]);
-          ctx.strokeStyle = CHART_COLORS.reference;
+          ctx.strokeStyle = chartColors.text;
           ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.moveTo(padL, threshY);
           ctx.lineTo(padL + plotW, threshY);
           ctx.stroke();
           ctx.restore();
-          ctx.fillStyle = CHART_COLORS.text;
+          ctx.fillStyle = chartColors.text;
           ctx.textAlign = "right";
           ctx.textBaseline = "bottom";
           ctx.fillText(alertThresholdMs + " " + I18N.t("unit.ms"), padL + plotW, threshY - 4);
@@ -2457,7 +2365,7 @@
 
         // failed request markers along the baseline
         for (var i = 0; i < visible.length; i++) {
-          if (visible[i].lost) drawMarker(ctx, xFor(visible[i].t), baseY - 6, CHART_COLORS.failed);
+          if (visible[i].lost) drawMarker(ctx, xFor(visible[i].t), baseY - 6, chartColors.failed);
         }
 
         // hover crosshair and tooltip on the nearest sample
@@ -2472,13 +2380,13 @@
         }
         var nx = xFor(nearest.t);
         var ny = nearest.lost ? baseY - 6 : yFor(nearest.ping);
-        ctx.strokeStyle = CHART_COLORS.reference;
+        ctx.strokeStyle = chartColors.text;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(Math.round(nx) + 0.5, padT);
         ctx.lineTo(Math.round(nx) + 0.5, baseY);
         ctx.stroke();
-        drawMarker(ctx, nx, ny, nearest.lost ? CHART_COLORS.failed : seriesStyle(nearest).line);
+        drawMarker(ctx, nx, ny, nearest.lost ? chartColors.failed : seriesStyle(nearest).line);
 
         I("tooltipTime").textContent =
           fmtTime(nearest.t) +
@@ -2636,6 +2544,8 @@
       document.addEventListener("DOMContentLoaded", refreshSelects);
 
       // Init — load server list first (async), then initialize UI
+      updateChartColors();
+      window.addEventListener("speedtest-theme-change", updateChartColors);
       loadModeFromUrl();
       resetUI();
       frame();
