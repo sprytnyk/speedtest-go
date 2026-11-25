@@ -9,6 +9,12 @@ const READY = 1;
 const RUNNING = 2;
 const FINISHED = 3;
 
+const WORKER_PHASES = {
+  1: { color: "download", status: "index.status.download" },
+  2: { color: "idle", status: "index.status.ping" },
+  3: { color: "upload", status: "index.status.upload" },
+};
+
 // Keep some global state here
 const testState = {
   state: INITIALIZING,
@@ -19,6 +25,7 @@ const testState = {
   noServer: false, // no server answered the reachability check
   aborted: false, // the last test was stopped before it finished
   startedAt: 0, // performance.now() when the test started
+  progressPhase: "idle", // keep the last phase color when the test ends
   samples: [], // { t: seconds since start, v: Mbps, kind: "dl" | "ul" }
   loaded: { download: null, upload: null }, // latency while each transfer ran, from the stability worker
   loadedDone: { download: false, upload: false }, // the pinger for each transfer finished, with or without a reply
@@ -94,6 +101,8 @@ function createSpeedtest() {
   testState.speedtest.setParameter("telemetry_latency", true);
   testState.speedtest.onupdate = (data) => {
     testState.testData = data;
+    const phase = WORKER_PHASES[data.testState];
+    if (phase) testState.progressPhase = phase.color;
     recordSample(data);
     trackLoadedLatency(data);
     testState.dirty = true;
@@ -166,6 +175,7 @@ function startButtonClickHandler() {
     case READY:
     case FINISHED:
       testState.testData = null;
+      testState.progressPhase = "idle";
       testState.samples = [];
       testState.loaded = { download: null, upload: null };
       testState.loadedDone = { download: false, upload: false };
@@ -533,7 +543,9 @@ function renderControls(buttonTexts) {
   if (state === FINISHED) progress = 1;
   else if (data) progress = (Number(data.dlProgress) + Number(data.ulProgress) + Number(data.pingProgress)) / 3;
   const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
-  $("progress-bar").style.width = pct + "%";
+  const progressBar = $("progress-bar");
+  progressBar.style.width = pct + "%";
+  progressBar.dataset.phase = testState.progressPhase;
   $("progress-track").setAttribute("aria-valuenow", pct);
   $("progress-percent").textContent = pct + "%";
   if (state !== RUNNING && !data) $("elapsed").textContent = "00:00";
@@ -569,9 +581,8 @@ function renderStatus() {
     title = I18N.t("index.status.loading");
     text = I18N.t("server.findingBest");
   } else if (testState.state === RUNNING) {
-    const phase = data ? data.testState : 0;
-    const phases = { 1: "index.status.download", 2: "index.status.ping", 3: "index.status.upload" };
-    title = I18N.t(phases[phase] || "index.status.starting");
+    const phase = WORKER_PHASES[data?.testState];
+    title = I18N.t(phase?.status || "index.status.starting");
     text = I18N.t("index.status.running");
   } else if (testState.state === FINISHED && data) {
     cls = "ok";

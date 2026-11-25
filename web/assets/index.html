@@ -481,9 +481,17 @@
       .progress-bar {
         height: 100%;
         width: 0;
-        background-color: var(--download);
+        background-color: var(--idle);
         border-radius: 9999px;
         transition: width 0.2s linear;
+      }
+
+      .progress-bar[data-phase="download"] {
+        background-color: var(--download);
+      }
+
+      .progress-bar[data-phase="upload"] {
+        background-color: var(--upload);
       }
 
       /* Status */
