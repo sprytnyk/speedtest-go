@@ -31,6 +31,7 @@ The [upstream notes](docs/upstream.md) list the commits we've reviewed and what 
 ## Features
 
 * Download and upload speed, ping and jitter, with a live speed chart
+* A progress bar that changes color as the speed test moves through its phases
 * Latency and jitter while downloading and uploading, after each transfer's warm-up
 * Jitter as the average change between consecutive pings, shown with the smallest and largest change
 * IP address, ISP and country of the client
@@ -43,6 +44,8 @@ The [upstream notes](docs/upstream.md) list the commits we've reviewed and what 
 * Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
 * Multiple test servers to choose from
 * English and Ukrainian, picked from the browser's language or a switch on every page
+* Light and dark themes on the speed test, stability test and statistics pages. The browser's preference sets the
+  theme until you pick one with the switch. The site remembers your choice.
 * The running version next to the source code link on every page, linked to its release page. `/version` returns it
   as JSON
 * Layouts for desktop and phone
@@ -242,7 +245,8 @@ average was 49 Mbps with both at `0`, and 62 Mbps with the defaults.
 ## Storing results
 
 The server stores a result when the page sends it at the end of a test. That gives every test an ID, the **Share**
-button with a result image, and the statistics page. To turn it on:
+button with a result image, and the statistics page. Images opened from the **Share** button or the statistics page
+use the current theme. To turn on result storage:
 
 1. Choose a database with `database_type`. `sqlite` is the simplest. It only needs `database_file` and creates its
    tables itself.
