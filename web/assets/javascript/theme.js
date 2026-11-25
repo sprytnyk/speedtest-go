@@ -43,6 +43,17 @@
     applyTheme();
   }
 
+  window.SpeedtestTheme = {
+    resultImageURL(value) {
+      const url = new URL(value, location.href);
+      const lang = window.I18N?.lang();
+      if (lang && lang !== "en") url.searchParams.set("lang", lang);
+      else url.searchParams.delete("lang");
+      url.searchParams.set("theme", currentTheme);
+      return url;
+    },
+  };
+
   let savedTheme;
   try {
     savedTheme = localStorage.getItem(storageKey);

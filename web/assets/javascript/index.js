@@ -556,10 +556,9 @@ function renderControls(buttonTexts) {
   const testId = data && data.testId;
   $("share-results").hidden = !(state === FINISHED && testState.telemetryEnabled && testId);
   if (testId) {
-    // the image is drawn in the page's language
-    const lang = I18N.lang() === "en" ? "" : "&lang=" + I18N.lang();
-    const url =
-      window.location.href.substring(0, window.location.href.lastIndexOf("/")) + "/results/?id=" + testId + lang;
+    const resultURL = new URL("results/", location.href);
+    resultURL.searchParams.set("id", testId);
+    const url = window.SpeedtestTheme.resultImageURL(resultURL).href;
     if ($("share-url").value !== url) {
       $("share-url").value = url;
       $("results").src = url;

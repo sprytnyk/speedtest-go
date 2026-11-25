@@ -1551,7 +1551,7 @@
             <section class="card animate-fade-in" aria-labelledby="image-title">
               <div class="card-head">
                 <h2 class="card-title" id="image-title" data-i18n="stats.image">Result image</h2>
-                <a class="back" href="{{ $.BaseURL }}results/?id={{ .UUID }}" target="_blank" rel="noopener" data-image-lang="href">
+                <a class="back" href="{{ $.BaseURL }}results/?id={{ .UUID }}" target="_blank" rel="noopener" data-result-image="href">
                   <span data-i18n="stats.openImage">Open</span>
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M15 3h6v6"></path>
@@ -1560,8 +1560,8 @@
                   </svg>
                 </a>
               </div>
-              <a class="result-image" href="{{ $.BaseURL }}results/?id={{ .UUID }}" target="_blank" rel="noopener" data-image-lang="href">
-                <img src="{{ $.BaseURL }}results/?id={{ .UUID }}" data-image-lang="src" width="600" height="320" alt="Result image of this test" data-i18n-attr="alt:stats.imageAlt" />
+              <a class="result-image" href="{{ $.BaseURL }}results/?id={{ .UUID }}" target="_blank" rel="noopener" data-result-image="href">
+                <img src="{{ $.BaseURL }}results/?id={{ .UUID }}" data-result-image="src" width="600" height="320" loading="lazy" alt="Result image of this test" data-i18n-attr="alt:stats.imageAlt" />
               </a>
             </section>
 
@@ -1715,6 +1715,26 @@
     {{- end }}
 
     <script type="text/javascript">
+      // Use the same theme and language for the preview and PNG links.
+      (function () {
+        var images = document.querySelectorAll("[data-result-image]");
+        if (!images.length || !window.SpeedtestTheme) return;
+
+        function updateImages() {
+          for (var i = 0; i < images.length; i++) {
+            var attr = images[i].getAttribute("data-result-image");
+            var oldURL = images[i].getAttribute(attr);
+            var url = window.SpeedtestTheme.resultImageURL(oldURL);
+            var path = url.pathname + url.search;
+            if (path !== oldURL) images[i].setAttribute(attr, path);
+          }
+        }
+
+        updateImages();
+        window.addEventListener("speedtest-theme-change", updateImages);
+        window.I18N?.onChange(updateImages);
+      })();
+
       // Numbers and times are rendered in English by the server; show them in the page's language.
       // Without i18n.js (a custom assets_path) the page stays in English and the switch stays hidden.
       (function () {
@@ -1741,16 +1761,6 @@
             times[j].textContent =
               date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) + " " +
               pad(date.getHours()) + ":" + pad(date.getMinutes());
-          }
-
-          // the result image has its labels in the page's language too
-          var images = document.querySelectorAll("[data-image-lang]");
-          for (var k = 0; k < images.length; k++) {
-            var attr = images[k].getAttribute("data-image-lang");
-            var url = new URL(images[k].getAttribute(attr), location.href);
-            if (lang === "en") url.searchParams.delete("lang");
-            else url.searchParams.set("lang", lang);
-            images[k].setAttribute(attr, url.pathname + url.search);
           }
         }
 

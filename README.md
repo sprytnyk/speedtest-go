@@ -262,11 +262,11 @@ button with a result image, and the statistics page. To turn it on:
 
 The server accepts telemetry requests up to 1 MiB. It rejects larger requests before saving a result.
 
-You can then open a stored test at:
+Open stored tests at these URLs.
 
-* `/results/?id=<id>`: the result image, in Ukrainian with `&lang=uk`
-* `/results/json?id=<id>`: the result as JSON
-* `/stats/`: stored tests, 100 per page, newest first. Find a test by ID or IP address. Filter by date or set a
+* `/results/?id=<id>` opens the PNG. Add `&lang=uk` for Ukrainian or `&theme=light` for the light theme.
+* `/results/json?id=<id>` returns the result as JSON.
+* `/stats/` lists 100 stored tests per page, newest first. Find a test by ID or IP address. Filter by date or set a
   minimum for download speed, upload speed, idle latency, or jitter. Delete one test, selected tests, or all tests.
 
 ### Databases

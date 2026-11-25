@@ -3,6 +3,7 @@ package results
 import (
 	"bytes"
 	"image"
+	"image/color"
 	"sync"
 	"testing"
 	"time"
@@ -87,25 +88,25 @@ func TestRenderResult(t *testing.T) {
 	noJitter.Extra = `{"latency":{"download":{"avg":48.27}}}`
 	fast := withLatency
 	fast.Download = "123456.78"
-	for _, r := range []*schema.TelemetryData{record, &withLatency, &noJitter, &fast} {
-		for lang, text := range imageTexts {
-			img := renderResult(r, "Example ISP with a rather long name that has to be shortened, Ukraine", text)
-			if img.Bounds() != image.Rect(0, 0, canvasWidth*imageScale, canvasHeight*imageScale) {
-				t.Fatalf("%s: unexpected size %v", lang, img.Bounds())
-			}
-			// rounded corners stay transparent, the card is opaque
-			if _, _, _, a := img.At(0, 0).RGBA(); a != 0 {
-				t.Errorf("%s: corner is not transparent", lang)
-			}
-			if _, _, _, a := img.At(canvasWidth*imageScale/2, canvasHeight*imageScale/2).RGBA(); a != 0xffff {
-				t.Errorf("%s: center is not opaque", lang)
+	for theme, palette := range map[string]*resultPalette{"light": &lightResultPalette, "dark": &darkResultPalette} {
+		for _, r := range []*schema.TelemetryData{record, &withLatency, &noJitter, &fast} {
+			for lang, text := range imageTexts {
+				img := renderResult(r, "Example ISP with a rather long name that has to be shortened, Ukraine", text, palette)
+				if img.Bounds() != image.Rect(0, 0, canvasWidth*imageScale, canvasHeight*imageScale) {
+					t.Fatalf("%s/%s: unexpected size %v", theme, lang, img.Bounds())
+				}
+				if _, _, _, a := img.At(0, 0).RGBA(); a != 0 {
+					t.Errorf("%s/%s: corner is not transparent", theme, lang)
+				}
+				if got := color.NRGBAModel.Convert(img.At(canvasWidth*imageScale/2, (canvasHeight-8)*imageScale)); got != palette.background {
+					t.Errorf("%s/%s: background is %v, want %v", theme, lang, got, palette.background)
+				}
 			}
 		}
 	}
 }
 
-// images rendered at the same time share the font faces, and must come out the same
-// as one rendered alone; run with -race to catch unguarded use of the faces
+// Run with -race to check that the renderer guards the shared font faces.
 func TestRenderResultConcurrent(t *testing.T) {
 	initFonts()
 	record := &schema.TelemetryData{
@@ -115,12 +116,18 @@ func TestRenderResultConcurrent(t *testing.T) {
 		Extra:     `{"latency":{"idle":{"avg":13.1,"jitter":1.86},"download":{"avg":48.27,"jitter":6.1},"upload":{"avg":31.5,"jitter":2}}}`,
 	}
 	const isp = "Example Fiber, Ukraine"
-	want := renderResult(record, isp, imageTexts["en"]).Pix
+	text := imageTexts["en"]
+	palettes := []*resultPalette{&lightResultPalette, &darkResultPalette}
+	want := [][]byte{
+		renderResult(record, isp, text, palettes[0]).Pix,
+		renderResult(record, isp, text, palettes[1]).Pix,
+	}
 
 	var wg sync.WaitGroup
-	for range 8 {
+	for i := range 8 {
+		palette := i % len(palettes)
 		wg.Go(func() {
-			if got := renderResult(record, isp, imageTexts["en"]).Pix; !bytes.Equal(got, want) {
+			if got := renderResult(record, isp, text, palettes[palette]).Pix; !bytes.Equal(got, want[palette]) {
 				t.Error("an image rendered alongside others differs from one rendered alone")
 			}
 		})

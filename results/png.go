@@ -43,25 +43,42 @@ const (
 	smallTileGap = 6 // least room between a small tile's label and its value
 )
 
-// colors from the web pages
-var (
-	colorSurface = color.NRGBA{0x1e, 0x29, 0x3b, 0xff}
-	colorBorder  = color.NRGBA{0x33, 0x41, 0x55, 0xff}
-	colorRaised  = color.NRGBA{0x33, 0x41, 0x55, 0x80}
-	colorInset   = color.NRGBA{0x0f, 0x17, 0x2a, 0xff}
-	colorText    = color.NRGBA{0xff, 0xff, 0xff, 0xff}
-	colorMuted   = color.NRGBA{0x94, 0xa3, 0xb8, 0xff}
-	colorAccent  = color.NRGBA{0x25, 0x63, 0xeb, 0xff}
-)
+type metricColor struct{ series, icon color.NRGBA }
 
-// a metric's color: base for the tile's icon tint and bar, light for the icon itself
-type metricColor struct{ base, light color.NRGBA }
+type resultPalette struct {
+	background, glow, dots, card, border, inset, text, muted color.NRGBA
+	download, upload, ping, jitter                           metricColor
+}
 
 var (
-	colorDownload = metricColor{color.NRGBA{0x3b, 0x82, 0xf6, 0xff}, color.NRGBA{0x60, 0xa5, 0xfa, 0xff}}
-	colorUpload   = metricColor{color.NRGBA{0xf5, 0x9e, 0x0b, 0xff}, color.NRGBA{0xfb, 0xbf, 0x24, 0xff}}
-	colorPing     = metricColor{color.NRGBA{0x8b, 0x5c, 0xf6, 0xff}, color.NRGBA{0xa7, 0x8b, 0xfa, 0xff}}
-	colorJitter   = metricColor{color.NRGBA{0x10, 0xb9, 0x81, 0xff}, color.NRGBA{0x34, 0xd3, 0x99, 0xff}}
+	lightResultPalette = resultPalette{
+		background: rgb(0xf8fafc),
+		glow:       withAlpha(rgb(0x2563eb), 0x27),
+		dots:       withAlpha(rgb(0x0f172a), 0x2a),
+		card:       withAlpha(rgb(0xffffff), 0xdb),
+		border:     withAlpha(rgb(0x0f172a), 0x17),
+		inset:      rgb(0xe2e8f0),
+		text:       rgb(0x020617),
+		muted:      rgb(0x64748b),
+		download:   metricColor{rgb(0x2563eb), rgb(0x2563eb)},
+		upload:     metricColor{rgb(0xb45309), rgb(0xb45309)},
+		ping:       metricColor{rgb(0x8b5cf6), rgb(0x7c3aed)},
+		jitter:     metricColor{rgb(0x10b981), rgb(0x047857)},
+	}
+	darkResultPalette = resultPalette{
+		background: rgb(0x020617),
+		glow:       withAlpha(rgb(0x3b82f6), 0x38),
+		dots:       withAlpha(rgb(0x94a3b8), 0x36),
+		card:       withAlpha(rgb(0x0f172a), 0xdb),
+		border:     withAlpha(rgb(0x94a3b8), 0x2b),
+		inset:      rgb(0x1e293b),
+		text:       rgb(0xf8fafc),
+		muted:      rgb(0x94a3b8),
+		download:   metricColor{rgb(0x3b82f6), rgb(0x60a5fa)},
+		upload:     metricColor{rgb(0xf59e0b), rgb(0xfbbf24)},
+		ping:       metricColor{rgb(0x8b5cf6), rgb(0xa78bfa)},
+		jitter:     metricColor{rgb(0x10b981), rgb(0x34d399)},
+	}
 )
 
 // imageText holds the labels for one language, picked with the lang query parameter. Tests
@@ -77,9 +94,8 @@ var imageTexts = map[string]imageText{
 
 var titleFace, subtitleFace, labelFace, valueFace, smallValueFace, unitFace, footFace font.Face
 
-// fontMu lets one image at a time use the faces above. A truetype face keeps a glyph cache
-// that isn't safe for concurrent use: two images rendered at once could panic or leave
-// broken glyphs in the cache for every image after them.
+// fontMu protects the shared font faces. Concurrent writes to their glyph
+// caches can corrupt text or cause a panic.
 var fontMu sync.Mutex
 
 func initFonts() {
@@ -132,10 +148,14 @@ func DrawPNG(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		text = imageTexts["en"]
 	}
+	palette := &darkResultPalette
+	if r.FormValue("theme") == "light" {
+		palette = &lightResultPalette
+	}
 
 	w.Header().Set("Content-Disposition", "inline; filename="+uuid+".png")
 	w.Header().Set("Content-Type", "image/png")
-	if err := png.Encode(w, renderResult(record, ispName(result.ProcessedString), text)); err != nil {
+	if err := png.Encode(w, renderResult(record, ispName(result.ProcessedString), text, palette)); err != nil {
 		log.Errorf("Failed to output image to HTTP client: %s", err)
 	}
 }
@@ -169,22 +189,22 @@ func formatImageValue(raw, decimal string) string {
 	return strings.Replace(strconv.FormatFloat(v, 'f', digits, 64), ".", decimal, 1)
 }
 
-func renderResult(record *schema.TelemetryData, isp string, text imageText) *image.RGBA {
+func renderResult(record *schema.TelemetryData, isp string, text imageText, palette *resultPalette) *image.RGBA {
 	fontMu.Lock()
 	defer fontMu.Unlock()
 	img := image.NewRGBA(image.Rect(0, 0, canvasWidth*imageScale, canvasHeight*imageScale))
 
-	// the card, with rounded corners left transparent
-	full := image.Rect(0, 0, canvasWidth, canvasHeight)
-	paint(img, full, colorSurface, roundRect(full, 20))
-	paint(img, full, colorBorder, ring(roundRect(full, 20), roundRect(full.Inset(1), 19)))
+	palette.paintBackground(img)
 
-	// header: icon box, name and subtitle
 	box := image.Rect(padding, padding, padding+44, padding+44)
-	paint(img, box, colorAccent, roundRect(box, 12))
-	drawIcon(img, box, 24, iconGauge, colorText)
-	drawText(img, titleFace, colorText, box.Max.X+14, padding+20, "LibreSpeed")
-	drawText(img, subtitleFace, colorMuted, box.Max.X+14, padding+39, text.subtitle)
+	clip := roundRect(box, 12)
+	paint(img, box, rgb(0x1d4ed8), clip)
+	paint(img, box, rgb(0x3b82f6), func(x, y float64) float64 {
+		return clip(x, y) * (1 - (y/imageScale-float64(box.Min.Y))/float64(box.Dy()))
+	})
+	drawIcon(img, box, 24, iconGauge, rgb(0xffffff))
+	drawText(img, titleFace, palette.text, box.Max.X+14, padding+20, "LibreSpeed")
+	drawText(img, subtitleFace, palette.muted, box.Max.X+14, padding+39, text.subtitle)
 
 	latency, _ := parseLatency(record.Extra)
 	loaded := func(s *LatencyStats) []tileRow {
@@ -198,62 +218,75 @@ func renderResult(record *schema.TelemetryData, isp string, text imageText) *ima
 		return rows
 	}
 
-	// download and upload tiles, with the latency and jitter while each ran
 	tileW := (canvasWidth - 2*padding - tileGap) / 2
 	top := box.Max.Y + 16
-	bigTile(img, image.Rect(padding, top, padding+tileW, top+116), iconDownload, colorDownload,
+	palette.bigTile(img, image.Rect(padding, top, padding+tileW, top+116), iconDownload, palette.download,
 		text.download, formatImageValue(record.Download, text.decimal), text.mbps, loaded(latency.Download))
-	bigTile(img, image.Rect(padding+tileW+tileGap, top, canvasWidth-padding, top+116), iconUpload, colorUpload,
+	palette.bigTile(img, image.Rect(padding+tileW+tileGap, top, canvasWidth-padding, top+116), iconUpload, palette.upload,
 		text.upload, formatImageValue(record.Upload, text.decimal), text.mbps, loaded(latency.Upload))
 
-	// ping and jitter tiles: the average idle latency when it was stored, the lowest ping otherwise
+	// Use the average idle latency when available. Older results use the lowest ping.
 	pingLabel, pingValue, jitterLabel := text.ping, formatImageValue(record.Ping, text.decimal), text.jitter
 	if latency.Idle.has() {
 		pingLabel, pingValue, jitterLabel = text.idleLatency, latencyText(latency.Idle.Avg, text.decimal), text.idleJitter
 	}
 	top += 116 + tileGap
-	smallTile(img, image.Rect(padding, top, padding+tileW, top+60), iconPing, colorPing,
+	palette.smallTile(img, image.Rect(padding, top, padding+tileW, top+60), iconPing, palette.ping,
 		pingLabel, pingValue, text.ms)
-	smallTile(img, image.Rect(padding+tileW+tileGap, top, canvasWidth-padding, top+60), iconJitter, colorJitter,
+	palette.smallTile(img, image.Rect(padding+tileW+tileGap, top, canvasWidth-padding, top+60), iconJitter, palette.jitter,
 		jitterLabel, formatImageValue(record.Jitter, text.decimal), text.ms)
 
-	// footer: provider on the left, time on the right
 	baseline := canvasHeight - padding + 2
+	divider := image.Rect(padding, baseline-18, canvasWidth-padding, baseline-17)
+	draw.Draw(img, toPixels(divider), image.NewUniform(palette.border), image.Point{}, draw.Over)
 	ts := record.Timestamp.Format("2006-01-02 15:04")
 	tsWidth := textWidth(footFace, ts)
-	drawText(img, footFace, colorMuted, canvasWidth-padding-tsWidth, baseline, ts)
+	drawText(img, footFace, palette.muted, canvasWidth-padding-tsWidth, baseline, ts)
 	if isp != "" {
 		maxWidth := canvasWidth - 2*padding - tsWidth - 24
-		drawText(img, footFace, colorMuted, padding, baseline, fitText(footFace, text.isp+": "+isp, maxWidth))
+		drawText(img, footFace, palette.muted, padding, baseline, fitText(footFace, text.isp+": "+isp, maxWidth))
 	}
 
 	return img
 }
 
-// tileRow is a label and its value, such as the latency while a speed was measured
+func (palette *resultPalette) paintBackground(img *image.RGBA) {
+	full := image.Rect(0, 0, canvasWidth, canvasHeight)
+	clip := roundRect(full, 20)
+	paint(img, full, palette.background, clip)
+	upper := image.Rect(0, 0, canvasWidth, 160)
+	paint(img, upper, palette.glow, func(x, y float64) float64 {
+		dx := (x/imageScale - canvasWidth/2) / 430
+		dy := (y/imageScale + 50) / 210
+		return clip(x, y) * clamp01(1-dx*dx-dy*dy)
+	})
+	for y := 12; y < upper.Max.Y; y += 22 {
+		faded := withAlpha(palette.dots, uint8(int(palette.dots.A)*(upper.Max.Y-y)/upper.Max.Y))
+		for x := 13; x < upper.Max.X-12; x += 22 {
+			dot := image.Rect(x, y, x+2, y+2)
+			paint(img, dot, faded, roundRect(dot, 1))
+		}
+	}
+	paint(img, full, palette.border, ring(clip, roundRect(full.Inset(1), 19)))
+}
+
 type tileRow struct {
 	label, value string
 }
 
-// bigTileRowBaselines are where the rows on the right of a big tile sit, between the tile's
-// label and the speed's unit, so long speeds pass under them instead of into them
+// Put the latency rows above the speed's baseline so long values fit below them.
 var bigTileRowBaselines = []int{54, 72}
 
-// bigTile draws a speed, with the latency and jitter while it was measured on the right when there are any
-func bigTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, label, value, unit string, rows []tileRow) {
-	paint(img, r, colorRaised, roundRect(r, 12))
+func (palette *resultPalette) bigTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, label, value, unit string, rows []tileRow) {
+	box := palette.paintTile(img, r, icon, c)
+	drawText(img, labelFace, palette.muted, box.Max.X+10, box.Min.Y+19, label)
 
-	box := image.Rect(r.Min.X+16, r.Min.Y+16, r.Min.X+16+28, r.Min.Y+16+28)
-	paint(img, box, withAlpha(c.base, 0x33), roundRect(box, 8))
-	drawIcon(img, box, 16, icon, c.light)
-	drawText(img, labelFace, colorMuted, box.Max.X+10, box.Min.Y+19, label)
-
-	x := drawText(img, valueFace, colorText, r.Min.X+16, r.Min.Y+86, value)
+	x := drawText(img, valueFace, palette.text, r.Min.X+16, r.Min.Y+86, value)
 	if value != "--" {
-		drawText(img, unitFace, colorMuted, x+6, r.Min.Y+86, unit)
+		drawText(img, unitFace, palette.muted, x+6, r.Min.Y+86, unit)
 	}
 
-	// values right-aligned in a column, labels right-aligned before it and shortened to stay clear of the speed
+	// Leave room for the speed before shortening the labels.
 	valuesWidth := 0
 	for _, row := range rows {
 		valuesWidth = max(valuesWidth, textWidth(labelFace, row.value))
@@ -263,37 +296,47 @@ func bigTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, 
 	for i, row := range rows[:min(len(rows), len(bigTileRowBaselines))] {
 		y := r.Min.Y + bigTileRowBaselines[i]
 		rowLabel := fitText(footFace, row.label, labelRoom)
-		drawText(img, footFace, colorMuted, labelEnd-textWidth(footFace, rowLabel), y, rowLabel)
-		drawText(img, labelFace, colorText, r.Max.X-16-textWidth(labelFace, row.value), y, row.value)
+		drawText(img, footFace, palette.muted, labelEnd-textWidth(footFace, rowLabel), y, rowLabel)
+		drawText(img, labelFace, palette.text, r.Max.X-16-textWidth(labelFace, row.value), y, row.value)
 	}
 
-	// a full bar, matching the finished test on the page
+	// Match the finished progress bar on the test page.
 	bar := image.Rect(r.Min.X+16, r.Max.Y-16, r.Max.X-16, r.Max.Y-12)
-	paint(img, bar, colorInset, roundRect(bar, 2))
+	paint(img, bar, palette.inset, roundRect(bar, 2))
 	if value != "--" {
-		paint(img, bar, c.base, roundRect(bar, 2))
+		paint(img, bar, c.series, roundRect(bar, 2))
 	}
 }
 
-func smallTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, label, value, unit string) {
-	paint(img, r, colorRaised, roundRect(r, 12))
+func (palette *resultPalette) smallTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor, label, value, unit string) {
+	box := palette.paintTile(img, r, icon, c)
 
-	box := image.Rect(r.Min.X+16, r.Min.Y+16, r.Min.X+16+28, r.Min.Y+16+28)
-	paint(img, box, withAlpha(c.base, 0x33), roundRect(box, 8))
-	drawIcon(img, box, 16, icon, c.light)
-
-	// value and unit, right-aligned, and the label shortened to the room left of them
 	baseline := r.Min.Y + 38
 	unitWidth := 0
 	if value != "--" {
 		unitWidth = 5 + textWidth(unitFace, unit)
 	}
 	x := r.Max.X - 16 - unitWidth - textWidth(smallValueFace, value)
-	drawText(img, labelFace, colorMuted, box.Max.X+10, box.Min.Y+19, fitText(labelFace, label, x-box.Max.X-10-smallTileGap))
-	x = drawText(img, smallValueFace, colorText, x, baseline, value)
+	drawText(img, labelFace, palette.muted, box.Max.X+10, box.Min.Y+19, fitText(labelFace, label, x-box.Max.X-10-smallTileGap))
+	x = drawText(img, smallValueFace, palette.text, x, baseline, value)
 	if value != "--" {
-		drawText(img, unitFace, colorMuted, x+5, baseline, unit)
+		drawText(img, unitFace, palette.muted, x+5, baseline, unit)
 	}
+}
+
+func (palette *resultPalette) paintTile(img *image.RGBA, r image.Rectangle, icon [][]point, c metricColor) image.Rectangle {
+	clip := roundRect(r, 12)
+	paint(img, r, palette.card, clip)
+	paint(img, r, palette.border, ring(clip, roundRect(r.Inset(1), 11)))
+
+	box := image.Rect(0, 0, 28, 28).Add(r.Min.Add(image.Pt(16, 16)))
+	paint(img, box, withAlpha(c.series, 0x24), roundRect(box, 8))
+	drawIcon(img, box, 16, icon, c.icon)
+	return box
+}
+
+func rgb(hex uint32) color.NRGBA {
+	return color.NRGBA{R: uint8(hex >> 16), G: uint8(hex >> 8), B: uint8(hex), A: 0xff}
 }
 
 func withAlpha(c color.NRGBA, a uint8) color.NRGBA {
