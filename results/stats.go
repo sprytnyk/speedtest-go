@@ -50,12 +50,23 @@ type StatsData struct {
 	Filters       url.Values
 	Filtered      bool
 	InvalidFilter bool
-	DetailQuery   string
 	// Deleted is the number of tests just deleted, for the notice shown
 	// after a delete; empty when nothing was
 	Deleted      string
 	DeleteFailed bool
 	Data         []StatsEntry
+}
+
+// DetailURL returns the result link with the list's filters and page.
+func (data *StatsData) DetailURL(id string) string {
+	query := url.Values{"id": {id}}
+	for key, values := range data.Filters {
+		query[key] = values
+	}
+	if data.Page > 1 {
+		query.Set("page", strconv.Itoa(data.Page))
+	}
+	return data.BaseURL + "stats/?" + query.Encode()
 }
 
 // StatsField is one value of stored JSON, under a readable label. Key, when
@@ -133,7 +144,7 @@ func Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var page bytes.Buffer
-	if err := statsTemplate.Execute(&page, data); err != nil {
+	if err := statsTemplate.Execute(&page, &data); err != nil {
 		log.Errorf("Error executing template: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -209,16 +220,6 @@ func statsSession(w http.ResponseWriter, r *http.Request, conf *config.Config, d
 	}
 	data.Page = page
 	data.ListURL = statsPageURL(listURL, page)
-	detailValues := url.Values{}
-	for key, values := range filters {
-		detailValues[key] = values
-	}
-	if page > 1 {
-		detailValues.Set("page", strconv.Itoa(page))
-	}
-	if encoded := detailValues.Encode(); encoded != "" {
-		data.DetailQuery = "&" + encoded
-	}
 
 	if op == "delete" || op == "deleteall" {
 		if r.Method != http.MethodPost {

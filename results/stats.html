@@ -1731,10 +1731,11 @@
               </thead>
               <tbody>
                 {{- range .Data }}
+                {{- $detailURL := $.DetailURL .UUID }}
                 <tr>
                   <td class="select"><input type="checkbox" name="id" value="{{ .UUID }}" form="delete-selected" aria-label="Select this test" data-i18n-attr="aria-label:stats.select" /></td>
-                  <td class="time"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}{{ $.DetailQuery }}"><time datetime="{{ .Time }}" title="{{ .TimeFull }}">{{ .TimeText }}</time></a></td>
-                  <td class="id"><a href="{{ $.BaseURL }}stats/?id={{ .UUID }}{{ $.DetailQuery }}">{{ .UUID }}</a></td>
+                  <td class="time"><a href="{{ $detailURL }}"><time datetime="{{ .Time }}" title="{{ .TimeFull }}">{{ .TimeText }}</time></a></td>
+                  <td class="id"><a href="{{ $detailURL }}">{{ .UUID }}</a></td>
                   <td class="num" data-label="Download, Mbps" data-i18n-attr="data-label:stats.col.download"><span data-num="{{ .DownloadText }}">{{ .DownloadText }}</span></td>
                   <td class="num" data-label="Upload, Mbps" data-i18n-attr="data-label:stats.col.upload"><span data-num="{{ .UploadText }}">{{ .UploadText }}</span></td>
                   <td class="num" data-label="Idle latency, ms" data-i18n-attr="data-label:stats.col.ping"><span data-num="{{ .PingText }}">{{ .PingText }}</span></td>

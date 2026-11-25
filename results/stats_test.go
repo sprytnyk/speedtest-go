@@ -2,6 +2,7 @@ package results
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -356,6 +357,25 @@ func TestStatsFilters(t *testing.T) {
 	if second.Code != http.StatusOK || strings.Count(second.Body.String(), `form="delete-selected" aria-label=`) != 3 ||
 		!strings.Contains(second.Body.String(), fmt.Sprintf("%026d", 0)) {
 		t.Fatal("IP search did not find the oldest matching results")
+	}
+	for _, column := range []string{"time", "id"} {
+		_, rest, found := strings.Cut(second.Body.String(), `<td class="`+column+`"><a href="`)
+		if !found {
+			t.Fatalf("the %s column is missing its result link", column)
+		}
+		href, _, _ := strings.Cut(rest, `"`)
+		target, err := url.Parse(html.UnescapeString(href))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := url.Values{"id": {fmt.Sprintf("%026d", 4)}, "ip": {"192.0.2.20"}, "page": {"2"}}
+		if target.Path != "/stats/" || !reflect.DeepEqual(target.Query(), want) {
+			t.Fatalf("the %s result link returned %s, want %s", column, target, want.Encode())
+		}
+		detail := request(http.MethodGet, target.String(), "")
+		if detail.Code != http.StatusOK || !strings.Contains(detail.Body.String(), `class="back" href="/stats/?ip=192.0.2.20&amp;page=2"`) {
+			t.Fatalf("the %s link returned %d or lost its back link", column, detail.Code)
+		}
 	}
 	filtered := request(http.MethodGet, "/stats/?ip=192.0.2.10&download=104&upload=84&latency=12&jitter=2", "")
 	if filtered.Code != http.StatusOK || strings.Count(filtered.Body.String(), `form="delete-selected" aria-label=`) != 100 {
