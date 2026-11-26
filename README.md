@@ -5,7 +5,7 @@
 
 # LibreSpeed
 
-![AI Generated](https://img.shields.io/badge/AI-generated-orange)
+![AI-assisted](https://img.shields.io/badge/AI-assisted-orange)
 
 No Flash, No Java, No WebSocket, No Bullshit.
 
