@@ -33,13 +33,14 @@ The [upstream notes](docs/upstream.md) list the commits we've reviewed and what 
 * Download and upload speed, ping and jitter, with a live speed chart
 * A progress bar that changes color as the speed test moves through its phases
 * Latency and jitter while downloading and uploading, after each transfer's warm-up
+* A speed test summary with separate lines for idle latency, download and upload
 * Jitter as the average change between consecutive pings, shown with the smallest and largest change
 * IP address, ISP and country of the client
 * Connection stability test at `/stability/`, with latency over time, jitter, the p50 and p95 of both, failed
   requests, an alert threshold and CSV export. It runs idle, while downloading, while uploading, or all three in turn.
-  It shows the latency of each phase and leaves out the pings while a transfer warms up. The result compares the
-  middle ping and the p95 under each load with idle. Add `?load=download`, `?load=upload` or `?load=all` to the
-  address to open it with that load picked.
+  It shows latency for each phase and leaves out warm-up pings. Under load, the summary compares p95 and the average
+  of the slowest 5% of pings with their idle values. Add `?load=download`, `?load=upload` or `?load=all` to the address
+  to choose the load when you open the page.
   [How the stability test works](docs/stability.md) shows its timers, workers and warm-ups in diagrams
 * Optional result storage, with a shareable result image, a JSON API and a password-protected statistics page
 * Multiple test servers to choose from
