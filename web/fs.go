@@ -6,46 +6,41 @@ import (
 	"os"
 )
 
+// noListingFS lets the file server serve directory indexes without listing directories.
 // Credit: https://stackoverflow.com/questions/49589685/good-way-to-disable-directory-listing-with-http-fileserver-in-go
-type justFilesFilesystem struct {
-	fs               http.FileSystem
-	readDirBatchSize int
-}
+type noListingFS struct{ http.FileSystem }
 
-func (fs justFilesFilesystem) Open(name string) (http.File, error) {
-	f, err := fs.fs.Open(name)
+func (fs noListingFS) Open(name string) (http.File, error) {
+	file, err := fs.FileSystem.Open(name)
 	if err != nil {
 		return nil, err
 	}
-	return neuteredStatFile{File: f, readDirBatchSize: fs.readDirBatchSize}, nil
+	return noListingFile{file}, nil
 }
 
-type neuteredStatFile struct {
-	http.File
-	readDirBatchSize int
-}
+type noListingFile struct{ http.File }
 
-func (e neuteredStatFile) Stat() (os.FileInfo, error) {
-	s, err := e.File.Stat()
+func (f noListingFile) Stat() (os.FileInfo, error) {
+	info, err := f.File.Stat()
 	if err != nil {
 		return nil, err
 	}
-	if !s.IsDir() {
-		return s, nil
+	if !info.IsDir() {
+		return info, nil
 	}
+
 	for {
-		files, err := e.File.Readdir(e.readDirBatchSize)
-		switch err {
-		case io.EOF:
+		entries, err := f.Readdir(2)
+		if err == io.EOF {
 			return nil, os.ErrNotExist
-		case nil:
-			for _, f := range files {
-				if f.Name() == "index.html" {
-					return s, nil
-				}
-			}
-		default:
+		}
+		if err != nil {
 			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.Name() == "index.html" {
+				return info, nil
+			}
 		}
 	}
 }

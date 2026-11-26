@@ -75,7 +75,7 @@ func newRouter(conf *config.Config) *chi.Mux {
 		}
 		assetFS = http.FS(sub)
 	} else {
-		assetFS = justFilesFilesystem{fs: http.Dir(conf.AssetsPath), readDirBatchSize: 2}
+		assetFS = noListingFS{http.Dir(conf.AssetsPath)}
 		// Older custom asset folders can lack theme files the Statistics page needs.
 		for _, name := range []string{"theme.css", "javascript/theme.js"} {
 			path := "/" + name
