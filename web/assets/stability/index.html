@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#020617" data-theme-color="dark" media="(prefers-color-scheme: dark)" />
     <script src="../javascript/theme.js"></script>
     <link rel="icon" href="../images/favicon.svg" />
-    <title data-i18n="stab.title">LibreSpeed - Stability Test</title>
+    <title data-i18n="stab.title">LibreSpeed stability test</title>
     <script type="text/javascript" src="../javascript/i18n.js"></script>
     <script type="text/javascript" src="../javascript/version.js" defer></script>
     <link rel="stylesheet" href="../theme.css" />
@@ -1135,8 +1135,8 @@
             </svg>
           </div>
           <div>
-            <h1 data-i18n="stab.heading">Stability Test</h1>
-            <p class="subtitle" data-i18n="stab.subtitle">Measure latency, jitter and failed requests over time, idle or under load.</p>
+            <h1 data-i18n="stab.heading">Stability test</h1>
+            <p class="subtitle" data-i18n="stab.subtitle">Measure latency, jitter and request failures while idle or under load.</p>
           </div>
         </div>
         <div class="topbar-actions">
@@ -1321,9 +1321,9 @@
           <div class="card-head">
             <div>
               <h2 class="card-title" data-i18n="stab.load.title">Latency under load</h2>
-              <p class="card-note" id="loadNote-all" data-i18n="stab.load.note">The first third of the test runs idle, the second while downloading, the last while uploading. Pings while a transfer warms up are left out.</p>
-              <p class="card-note" id="loadNote-download" data-i18n="stab.load.note.download" hidden>The whole test runs while downloading. Pings while it warms up are left out.</p>
-              <p class="card-note" id="loadNote-upload" data-i18n="stab.load.note.upload" hidden>The whole test runs while uploading. Pings while it warms up are left out.</p>
+              <p class="card-note" id="loadNote-all" data-i18n="stab.load.note">The test spends equal time idle, downloading and uploading, in that order. The statistics exclude warm-up pings.</p>
+              <p class="card-note" id="loadNote-download" data-i18n="stab.load.note.download" hidden>The test downloads the whole time. The statistics exclude warm-up pings.</p>
+              <p class="card-note" id="loadNote-upload" data-i18n="stab.load.note.upload" hidden>The test uploads the whole time. The statistics exclude warm-up pings.</p>
             </div>
           </div>
           <table class="phase-table">

@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#020617" data-theme-color="dark" media="(prefers-color-scheme: dark)" />
     <script src="{{ .BaseURL }}javascript/theme.js"></script>
     <link rel="icon" href="{{ .BaseURL }}images/favicon.svg" />
-    <title data-i18n="stats.title">LibreSpeed - Statistics</title>
+    <title data-i18n="stats.title">LibreSpeed statistics</title>
     <script type="text/javascript" src="{{ .BaseURL }}javascript/i18n.js"></script>
     <link rel="stylesheet" href="{{ .BaseURL }}theme.css" />
     <style>
@@ -1245,7 +1245,7 @@
             </svg>
             <div>
               <p class="verdict-title" data-i18n="stats.disabled">Statistics are disabled</p>
-              <p class="verdict-text"><span data-i18n="stats.disabledText">Results are not stored, because the database type is set to</span> <code>none</code>.</p>
+              <p class="verdict-text"><span data-i18n="stats.disabledText">The server does not store results when the database type is</span> <code>none</code>.</p>
             </div>
           </div>
         </section>
@@ -1338,7 +1338,7 @@
           </svg>
           <div>
             <p class="verdict-title" data-i18n="stats.deleteFailed">Could not delete the tests</p>
-            <p class="verdict-text" data-i18n="stats.loadFailedText">The database returned an error. The details are in the server log.</p>
+            <p class="verdict-text" data-i18n="stats.loadFailedText">The database returned an error. Check the server log for details.</p>
           </div>
         </div>
         {{- end }}
@@ -1366,7 +1366,7 @@
           </svg>
           <div>
             <p class="verdict-title" data-i18n="stats.loadFailed">Could not load the tests</p>
-            <p class="verdict-text" data-i18n="stats.loadFailedText">The database returned an error. The details are in the server log.</p>
+            <p class="verdict-text" data-i18n="stats.loadFailedText">The database returned an error. Check the server log for details.</p>
           </div>
         </div>
         {{- else if .Single }}
