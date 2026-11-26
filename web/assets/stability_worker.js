@@ -50,13 +50,23 @@ function newStats() {
 // percentiles are left out until there are this many values, so the first seconds don't show noise
 const PERCENTILE_MIN_VALUES = 20;
 
-// the nearest-rank percentile, so the value is always one that was really measured; -1 while there are too few values
-function percentile(values, p) {
-  if (values.length < PERCENTILE_MIN_VALUES) return -1;
-  const sorted = values.slice().sort(function (a, b) {
+function sortedValues(values) {
+  return values.slice().sort(function (a, b) {
     return a - b;
   });
+}
+
+// the nearest-rank percentile, so the value is always one that was really measured; -1 while there are too few values
+function percentile(sorted, p) {
+  if (sorted.length < PERCENTILE_MIN_VALUES) return -1;
   return sorted[Math.ceil((p / 100) * sorted.length) - 1];
+}
+
+function worst5Average(sorted) {
+  if (sorted.length < PERCENTILE_MIN_VALUES) return -1;
+  const count = Math.ceil(sorted.length / 20);
+  const slowest = sorted.slice(-count);
+  return slowest.reduce((sum, ping) => sum + ping, 0) / count;
 }
 
 function addPing(s, ms) {
@@ -90,6 +100,8 @@ function addLoss(s) {
 }
 
 function phaseSummary(s) {
+  const pings = sortedValues(s.pings);
+  const changes = sortedValues(s.changes);
   return {
     avg: s.avg,
     min: s.min,
@@ -97,10 +109,11 @@ function phaseSummary(s) {
     jitter: s.jitter,
     jitterMin: s.jitterMin,
     jitterMax: s.jitterMax,
-    p50: percentile(s.pings, 50),
-    p95: percentile(s.pings, 95),
-    jitterP50: percentile(s.changes, 50),
-    jitterP95: percentile(s.changes, 95),
+    p50: percentile(pings, 50),
+    p95: percentile(pings, 95),
+    worst5Avg: worst5Average(pings),
+    jitterP50: percentile(changes, 50),
+    jitterP95: percentile(changes, 95),
     loss: s.loss,
     samples: s.samples,
     failed: s.failed
@@ -113,6 +126,8 @@ this.addEventListener("message", function (e) {
     // return current state with delta ping data
     const newData = pingData.slice(lastReportedIndex);
     lastReportedIndex = pingData.length;
+    const pings = sortedValues(overall.pings);
+    const changes = sortedValues(overall.changes);
     postMessage(
       JSON.stringify({
         testState: testState,
@@ -123,10 +138,10 @@ this.addEventListener("message", function (e) {
         jitter: overall.jitter,
         jitterMin: overall.jitterMin,
         jitterMax: overall.jitterMax,
-        p50: percentile(overall.pings, 50),
-        p95: percentile(overall.pings, 95),
-        jitterP50: percentile(overall.changes, 50),
-        jitterP95: percentile(overall.changes, 95),
+        p50: percentile(pings, 50),
+        p95: percentile(pings, 95),
+        jitterP50: percentile(changes, 50),
+        jitterP95: percentile(changes, 95),
         packetLoss: overall.loss,
         elapsed: elapsed,
         duration: settings.duration,

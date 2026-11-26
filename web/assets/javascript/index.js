@@ -586,20 +586,7 @@ function renderStatus() {
   } else if (testState.state === FINISHED && data) {
     cls = "ok";
     title = I18N.t("index.status.complete");
-    // one sentence for the speeds and one for the latency of each phase; jitter is left to its card
-    const sentences = [];
-    const speeds = summaryParts([
-      ["index.summary.download", data.dlStatus],
-      ["index.summary.upload", data.ulStatus],
-    ]);
-    if (speeds.length) sentences.push(capitalize(speeds.join(", ")) + ".");
-    const latency = summaryParts([
-      ["index.summary.idle", idleLatency(data)],
-      ["index.summary.downloading", testState.loaded.download && testState.loaded.download.avg],
-      ["index.summary.uploading", testState.loaded.upload && testState.loaded.upload.avg],
-    ]);
-    if (latency.length) sentences.push(I18N.t("index.summary.latency", { v: latency.join(", ") }));
-    text = sentences.length ? sentences.join(" ") : I18N.t("index.status.none");
+    text = speedSummary(data);
   } else if (testState.aborted) {
     title = I18N.t("status.stopped");
     text = I18N.t("index.status.stoppedText");
@@ -610,7 +597,35 @@ function renderStatus() {
 
   $("status").className = "verdict " + cls;
   $("status-title").textContent = title;
-  $("status-text").textContent = text;
+  $("status-text").replaceChildren(text);
+}
+
+function speedSummary(data) {
+  const summary = document.createDocumentFragment();
+  const idle = formatNumber(idleLatency(data));
+  if (idle !== "--") appendSummaryLine(summary, "index.idleLatency", idle + "\u00a0" + I18N.t("unit.ms") + ".");
+
+  const transfers = [
+    ["index.download", data.dlStatus, testState.loaded.download?.avg],
+    ["index.upload", data.ulStatus, testState.loaded.upload?.avg],
+  ];
+  for (const [key, rawSpeed, rawLatency] of transfers) {
+    const speed = formatNumber(rawSpeed);
+    const latency = formatNumber(rawLatency);
+    const parts = [];
+    if (speed !== "--") parts.push(speed + "\u00a0" + I18N.t("unit.mbps"));
+    if (latency !== "--") parts.push(I18N.t("index.summary.latency", { v: latency }));
+    if (parts.length) appendSummaryLine(summary, key, parts.join(", "));
+  }
+  return summary.hasChildNodes() ? summary : I18N.t("index.status.none");
+}
+
+function appendSummaryLine(summary, key, text) {
+  const row = document.createElement("div");
+  const label = document.createElement("strong");
+  label.textContent = I18N.t(key);
+  row.append(label, " " + text);
+  summary.append(row);
 }
 
 function renderResults() {
@@ -844,21 +859,4 @@ function formatNumber(value) {
   value = Number(value);
   if (isNaN(value) || value < 0) return "--";
   return I18N.num(value, value < 10 ? 2 : value < 100 ? 1 : 0);
-}
-
-/**
- * Fill in each measured value's text, skipping the ones not measured
- * @param {Array} results - pairs of a translation key and a value
- * @returns {string[]} The texts
- */
-function summaryParts(results) {
-  const parts = [];
-  for (const [key, value] of results) {
-    if (formatNumber(value) !== "--") parts.push(I18N.t(key, { v: formatNumber(value) }));
-  }
-  return parts;
-}
-
-function capitalize(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }

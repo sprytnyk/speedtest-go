@@ -1244,7 +1244,7 @@
             </svg>
             <div>
               <p class="verdict-title" id="verdictTitle">Ready</p>
-              <p class="verdict-text" id="verdictText">Press Start to measure stability.</p>
+              <div class="verdict-text" id="verdictText">Press Start to measure stability.</div>
             </div>
           </div>
         </section>
@@ -1962,32 +1962,37 @@
 
       function fmtDelta(v) {
         var a = Math.abs(v);
-        return (v < 0 ? "−" : "+") + I18N.num(a, a < 10 ? 1 : 0);
+        return (v < 0 ? "-" : "+") + I18N.num(a, a < 10 ? 1 : 0);
       }
 
-      // How much the load adds to the idle latency. A few slow pings pull the average up but don't move the middle
-      // ping, so the middle ping (p50) shows the typical change. The p95 shows how much slower the slowest pings get.
-      // The worker gives both only from 20 pings in a phase, which a slow link may never reach, so until then this
-      // compares the averages
       function loadSummary(ph) {
-        var withPct = function (p) {
-          return p.p50 >= 0 && p.p95 >= 0;
-        };
-        var upload = received(ph[2]);
-        var pct = withPct(ph[0]) && withPct(ph[1]);
-        // while the test runs, leave the upload out until it has 20 pings, or the download's numbers would switch back
-        // to averages for the upload's first seconds
-        if (upload && pct && !withPct(ph[2]) && running) upload = false;
-        if (upload) pct = pct && withPct(ph[2]);
-        var key = upload ? "stab.loadSummary" : "stab.loadSummary.download";
-        var mid = pct ? "p50" : "avg";
-        var deltas = { dl: fmtDelta(ph[1][mid] - ph[0][mid]) };
-        if (upload) deltas.ul = fmtDelta(ph[2][mid] - ph[0][mid]);
-        var text = I18N.t(key, deltas);
-        if (!pct) return text;
-        var slow = { dl95: fmtDelta(ph[1].p95 - ph[0].p95) };
-        if (upload) slow.ul95 = fmtDelta(ph[2].p95 - ph[0].p95);
-        return text + " " + I18N.t(key + ".p95", slow);
+        var idle = ph[0];
+        var labels = ["index.idleLatency", "stab.phase.download", "stab.phase.upload"];
+        var summary = document.createDocumentFragment();
+        for (var i = 0; i < labels.length; i++) {
+          var phase = ph[i];
+          if (!received(phase)) continue;
+          var text;
+          if (i === 0) {
+            text = idle.p95 >= 0
+              ? I18N.t("stab.loadSummary.idle", { v: fmtZero(idle.p95) })
+              : I18N.t("stab.loadSummary.average", { v: fmtZero(idle.avg) }) + ".";
+          } else if (idle.p95 >= 0 && phase.p95 >= 0) {
+            text = I18N.t("stab.loadSummary.p95", {
+              delta: fmtDelta(phase.p95 - idle.p95),
+              worst5: fmtDelta(phase.worst5Avg - idle.worst5Avg),
+            });
+          } else {
+            text = I18N.t("stab.loadSummary.average", { v: fmtDelta(phase.avg - idle.avg) });
+          }
+
+          var row = document.createElement("div");
+          var label = document.createElement("strong");
+          label.textContent = I18N.t(labels[i]);
+          row.append(label, " " + text);
+          summary.append(row);
+        }
+        return summary;
       }
 
       // verdict box style for each rating; the title always names the rating, so it never relies on color alone
@@ -1996,7 +2001,7 @@
       function setVerdict(cls, title, text) {
         I("verdict").className = "verdict " + cls;
         I("verdictTitle").textContent = title;
-        I("verdictText").textContent = text;
+        I("verdictText").replaceChildren(text);
       }
 
       // the idle message as translation keys, so it can be redone when the language changes
@@ -2025,7 +2030,7 @@
           text = I18N.t("stab.noResponsesText");
         } else {
           title = I18N.t("stab.rating." + r.cls);
-          if (loadTest && received(ph[0]) && received(ph[1])) {
+          if (loadTest && received(ph[0]) && (received(ph[1]) || received(ph[2]))) {
             text = loadSummary(ph);
           } else {
             text = I18N.t("stab.summary", { avg: fmt(d.avgPing), jitter: fmt(d.jitter), loss: I18N.num(d.packetLoss, 1) });
@@ -2543,7 +2548,7 @@
       // the translations are applied once the page has loaded
       document.addEventListener("DOMContentLoaded", refreshSelects);
 
-      // Init — load server list first (async), then initialize UI
+      // Load the server list first, then initialize the UI
       updateChartColors();
       window.addEventListener("speedtest-theme-change", updateChartColors);
       loadModeFromUrl();

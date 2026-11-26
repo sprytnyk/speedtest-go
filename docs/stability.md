@@ -177,19 +177,17 @@ forgets the last ping, and the first ping after the warm-up has nothing to compa
 
 ## 5. The result message
 
-The box above the chart rates the test Great, Good, Poor or Bad by the average latency, the jitter and the failed
-requests. With a load, it rates each of the three by the worst phase.
+The box above the chart rates the test as Great, Good, Poor or Bad. It uses average latency, jitter and the percentage
+of failed requests. Under load, it uses the worst phase for each measure.
 
-With a load, the line under the rating compares each phase with idle. The first sentence gives the change in the middle
-ping, the p50. The second gives the change in the p95, the time that 95% of the pings took or less. For example:
+The idle line shows p95, the time within which at least 95% of pings finish. The first number on each load line shows
+how much p95 changed from idle. The second compares the average of the slowest 5% with the same average at idle.
+The test rounds up the number of pings in that group.
 
-> Compared to idle, latency changes by +1.4 ms while downloading and +1.2 ms while uploading. For the slowest 5% of
-> pings, it changes by +8 ms and +6 ms.
+> **Idle latency** 38.7 ms (p95).
+>
+> **Download** -0.4 ms, worst 5% +13 ms
+>
+> **Upload** -0.7 ms, worst 5% +1.2 ms
 
-A few slow pings pull the average up but don't move the middle ping, so the middle ping shows the typical change. The
-p95 shows how much slower the slowest pings get, and those are the pings that make calls stutter.
-
-The worker works out p50 and p95 only once a phase has 20 counted pings. A 60 s test has 80 to 100 in each phase, but a
-link that is very slow under load may never get there. Until every phase in the line has 20, the line compares the
-averages and leaves out the second sentence. While the test runs, the line leaves the upload out until it has 20 pings.
-Otherwise the download's numbers would switch back to averages for the upload's first seconds.
+The test compares average latency until idle and the phase being compared each have 20 replies.
