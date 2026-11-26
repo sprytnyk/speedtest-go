@@ -5,13 +5,13 @@ go 1.27.0
 toolchain go1.27.4
 
 require (
-	github.com/breml/rootcerts v0.3.8
+	github.com/breml/rootcerts v0.3.9
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-chi/render v1.0.3
-	github.com/go-sql-driver/mysql v1.10.1
+	github.com/go-sql-driver/mysql v1.10.2
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/gorilla/securecookie v1.1.2
 	github.com/gorilla/sessions v1.4.0
